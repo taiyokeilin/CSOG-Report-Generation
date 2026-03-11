@@ -187,26 +187,66 @@ def build_report_sheet(
     ws.row_dimensions[current_row].height = 30
     current_row += 1
 
-    # Meta row
-    meta = [
-        session_info.get("date", ""), "", "", "",
-        "Player:", "", "", session_info.get("player", ""), "",
-        "Coach:", "", session_info.get("coach", ""), "", ""
-    ]
-    for col_idx, val in enumerate(meta, 1):
-        cell = ws.cell(row=current_row, column=col_idx, value=val)
-        cell.font = _font(bold=(val in ("Player:", "Coach:")), size=11)
-        cell.fill = _fill("D6E4F0")
-        cell.alignment = _left()
-    ws.row_dimensions[current_row].height = 20
+    # ── Row 2: Date | Player: | Player Name | Coach: | Coach Name ────────────
+    meta_row = current_row
+    for c in range(1, NCOLS + 1):
+        ws.cell(row=meta_row, column=c).fill = _fill("D6E4F0")
+
+    # A2:B2 — date, merged, bold, centered
+    ws.merge_cells(start_row=meta_row, start_column=1, end_row=meta_row, end_column=2)
+    date_cell = ws.cell(row=meta_row, column=1, value=session_info.get("date", ""))
+    date_cell.font = _font(bold=True, size=11)
+    date_cell.fill = _fill("D6E4F0")
+    date_cell.alignment = _center()
+
+    # E2 — "Player:" right-justified
+    player_label = ws.cell(row=meta_row, column=5, value="Player:")
+    player_label.font = _font(bold=True, size=11)
+    player_label.fill = _fill("D6E4F0")
+    player_label.alignment = Alignment(horizontal="right", vertical="center")
+
+    # F2:H2 — player name, merged, left-justified
+    ws.merge_cells(start_row=meta_row, start_column=6, end_row=meta_row, end_column=8)
+    player_val = ws.cell(row=meta_row, column=6, value=session_info.get("player", ""))
+    player_val.font = _font(size=11)
+    player_val.fill = _fill("D6E4F0")
+    player_val.alignment = _left()
+
+    # J2 — "Coach:" right-justified
+    coach_label = ws.cell(row=meta_row, column=10, value="Coach:")
+    coach_label.font = _font(bold=True, size=11)
+    coach_label.fill = _fill("D6E4F0")
+    coach_label.alignment = Alignment(horizontal="right", vertical="center")
+
+    # K2:L2 — coach name, merged, left-justified
+    ws.merge_cells(start_row=meta_row, start_column=11, end_row=meta_row, end_column=12)
+    coach_val = ws.cell(row=meta_row, column=11, value=session_info.get("coach", ""))
+    coach_val.font = _font(size=11)
+    coach_val.fill = _fill("D6E4F0")
+    coach_val.alignment = _left()
+
+    ws.row_dimensions[meta_row].height = 20
     current_row += 1
 
+    # ── Row 3: Week: | Week value ─────────────────────────────────────────────
     week_row = current_row
-    ws.cell(row=week_row, column=5, value="Week:").font = _font(bold=True)
-    ws.cell(row=week_row, column=8, value=session_info.get("week", "")).font = _font()
-    ws.cell(row=week_row, column=5).fill = _fill("D6E4F0")
     for c in range(1, NCOLS + 1):
         ws.cell(row=week_row, column=c).fill = _fill("D6E4F0")
+
+    # E3 — "Week:" right-justified
+    week_label_cell = ws.cell(row=week_row, column=5, value="Week:")
+    week_label_cell.font = _font(bold=True, size=11)
+    week_label_cell.fill = _fill("D6E4F0")
+    week_label_cell.alignment = Alignment(horizontal="right", vertical="center")
+
+    # F3:H3 — week value, merged, left-justified
+    ws.merge_cells(start_row=week_row, start_column=6, end_row=week_row, end_column=8)
+    week_val = ws.cell(row=week_row, column=6, value=session_info.get("week", ""))
+    week_val.font = _font(size=11)
+    week_val.fill = _fill("D6E4F0")
+    week_val.alignment = _left()
+
+    ws.row_dimensions[week_row].height = 20
     current_row += 2
 
     # ── Sections ─────────────────────────────────────────────────────────────
