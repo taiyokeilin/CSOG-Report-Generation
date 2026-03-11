@@ -209,16 +209,6 @@ def build_report_sheet(
         ws.cell(row=week_row, column=c).fill = _fill("D6E4F0")
     current_row += 2
 
-    # ── Distance note ────────────────────────────────────────────────────────
-    note_cell = ws.cell(
-        row=current_row, column=1,
-        value="💡 Yellow cells (Distance) are editable — changing them recalculates Target and Actual columns automatically."
-    )
-    note_cell.font = _font(size=9, color="555555", bold=False)
-    note_cell.fill = _fill("FFFDE7")
-    ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=NCOLS)
-    current_row += 2
-
     # ── Sections ─────────────────────────────────────────────────────────────
     all_stat_rows = []
 
@@ -297,10 +287,14 @@ def build_report_sheet(
                 cell.font = _font(size=10)
                 cell.border = _border(bottom=Side(style="thin", color="CCCCCC"))
 
-            # Special styling
+            # Special styling — Distance and Level are both yellow (editable)
             dist_cell = ws.cell(row=current_row, column=COL_DIST)
             dist_cell.fill = _fill(C_DIST_BG)
             dist_cell.font = _font(bold=True, color="000080", size=10)
+
+            level_cell = ws.cell(row=current_row, column=COL_LEVEL)
+            level_cell.fill = _fill(C_DIST_BG)
+            level_cell.font = _font(bold=True, color="000080", size=10)
 
             tpct_cell = ws.cell(row=current_row, column=COL_TPCT)
             tpct_cell.number_format = "0.0%"
