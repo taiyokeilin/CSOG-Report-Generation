@@ -41,7 +41,7 @@ with col2:
     monitor_type = st.selectbox(
         "Launch Monitor",
         ["TrackMan", "Foresight", "FlightScope"],
-        help="Select the device that recorded this session.",
+        help="Select the device that recorded this session",
     )
 
 df = None
