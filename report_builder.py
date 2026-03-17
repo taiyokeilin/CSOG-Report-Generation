@@ -15,13 +15,13 @@ from calculations import (
 from data.tour_targets import get_tour_target, get_level_multipliers
 
 # ── Palette ──────────────────────────────────────────────────────────────────
-C_HEADER_BG   = "1F4E79"   # dark blue
-C_HEADER_FG   = "FFFFFF"
-C_SECTION_BG  = "2E75B6"   # mid blue
-C_SECTION_FG  = "FFFFFF"
-C_COL_HDR_BG  = "BDD7EE"   # light blue
-C_DIST_BG     = "FFFF00"   # yellow – editable distance
-C_ALT_ROW     = "EBF3FB"   # alternating row tint
+C_HEADER_BG   = "FFFFFF"
+C_HEADER_FG   = "000000"
+C_SECTION_BG  = "FFFFFF"
+C_SECTION_FG  = "000000"
+C_COL_HDR_BG  = "FFFFFF"
+C_DIST_BG     = "FFFFFF"
+C_ALT_ROW     = "FFFFFF"
 C_GREEN       = "E2EFDA"
 C_AMBER       = "FFEB9C"
 C_RED_BG      = "FFC7CE"
@@ -32,6 +32,7 @@ C_RAW_FG      = "000000"
 
 THIN = Side(style="thin", color="AAAAAA")
 MED  = Side(style="medium", color="555555")
+FULL_BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 
 def _border(left=None, right=None, top=None, bottom=None):
     return Border(left=left or Side(), right=right or Side(),
@@ -80,10 +81,11 @@ def _col_header_row(ws, row, headers: list, ncols: int):
         cell.font = _font(bold=True, size=10)
         cell.fill = _fill(C_COL_HDR_BG)
         cell.alignment = _center()
-        cell.border = _border(bottom=Side(style="thin"), top=Side(style="thin"))
+        cell.border = FULL_BORDER
     for col_idx in range(len(headers) + 1, ncols + 1):
         cell = ws.cell(row=row, column=col_idx)
         cell.fill = _fill(C_COL_HDR_BG)
+        cell.border = FULL_BORDER
 
 
 def _goal_status_style(cell, status):
@@ -190,39 +192,39 @@ def build_report_sheet(
     # ── Row 2: Date | Player: | Player Name | Coach: | Coach Name ────────────
     meta_row = current_row
     for c in range(1, NCOLS + 1):
-        ws.cell(row=meta_row, column=c).fill = _fill("D6E4F0")
+        ws.cell(row=meta_row, column=c).fill = _fill("FFFFFF")
 
     # A2:B2 — date, merged, bold, centered
     ws.merge_cells(start_row=meta_row, start_column=1, end_row=meta_row, end_column=2)
     date_cell = ws.cell(row=meta_row, column=1, value=session_info.get("date", ""))
     date_cell.font = _font(bold=True, size=11)
-    date_cell.fill = _fill("D6E4F0")
+    date_cell.fill = _fill("FFFFFF")
     date_cell.alignment = _center()
 
     # E2 — "Player:" right-justified
     player_label = ws.cell(row=meta_row, column=5, value="Player:")
     player_label.font = _font(bold=True, size=11)
-    player_label.fill = _fill("D6E4F0")
+    player_label.fill = _fill("FFFFFF")
     player_label.alignment = Alignment(horizontal="right", vertical="center")
 
     # F2:H2 — player name, merged, left-justified
     ws.merge_cells(start_row=meta_row, start_column=6, end_row=meta_row, end_column=8)
     player_val = ws.cell(row=meta_row, column=6, value=session_info.get("player", ""))
     player_val.font = _font(size=11)
-    player_val.fill = _fill("D6E4F0")
+    player_val.fill = _fill("FFFFFF")
     player_val.alignment = _left()
 
     # J2 — "Coach:" right-justified
     coach_label = ws.cell(row=meta_row, column=10, value="Coach:")
     coach_label.font = _font(bold=True, size=11)
-    coach_label.fill = _fill("D6E4F0")
+    coach_label.fill = _fill("FFFFFF")
     coach_label.alignment = Alignment(horizontal="right", vertical="center")
 
     # K2:L2 — coach name, merged, left-justified
     ws.merge_cells(start_row=meta_row, start_column=11, end_row=meta_row, end_column=12)
     coach_val = ws.cell(row=meta_row, column=11, value=session_info.get("coach", ""))
     coach_val.font = _font(size=11)
-    coach_val.fill = _fill("D6E4F0")
+    coach_val.fill = _fill("FFFFFF")
     coach_val.alignment = _left()
 
     ws.row_dimensions[meta_row].height = 20
@@ -231,19 +233,19 @@ def build_report_sheet(
     # ── Row 3: Week: | Week value ─────────────────────────────────────────────
     week_row = current_row
     for c in range(1, NCOLS + 1):
-        ws.cell(row=week_row, column=c).fill = _fill("D6E4F0")
+        ws.cell(row=week_row, column=c).fill = _fill("FFFFFF")
 
     # E3 — "Week:" right-justified
     week_label_cell = ws.cell(row=week_row, column=5, value="Week:")
     week_label_cell.font = _font(bold=True, size=11)
-    week_label_cell.fill = _fill("D6E4F0")
+    week_label_cell.fill = _fill("FFFFFF")
     week_label_cell.alignment = Alignment(horizontal="right", vertical="center")
 
     # F3:H3 — week value, merged, left-justified
     ws.merge_cells(start_row=week_row, start_column=6, end_row=week_row, end_column=8)
     week_val = ws.cell(row=week_row, column=6, value=session_info.get("week", ""))
     week_val.font = _font(size=11)
-    week_val.fill = _fill("D6E4F0")
+    week_val.fill = _fill("FFFFFF")
     week_val.alignment = _left()
 
     ws.row_dimensions[week_row].height = 20
@@ -325,16 +327,9 @@ def build_report_sheet(
                 cell.fill = _fill(bg)
                 cell.alignment = _center()
                 cell.font = _font(size=10)
-                cell.border = _border(bottom=Side(style="thin", color="CCCCCC"))
+                cell.border = FULL_BORDER
 
-            # Special styling — Distance and Level are both yellow (editable)
-            dist_cell = ws.cell(row=current_row, column=COL_DIST)
-            dist_cell.fill = _fill(C_DIST_BG)
-            dist_cell.font = _font(bold=True, color="000080", size=10)
-
-            level_cell = ws.cell(row=current_row, column=COL_LEVEL)
-            level_cell.fill = _fill(C_DIST_BG)
-            level_cell.font = _font(bold=True, color="000080", size=10)
+            # No special cell highlighting — all white
 
             tpct_cell = ws.cell(row=current_row, column=COL_TPCT)
             tpct_cell.number_format = "0.0%"
@@ -375,8 +370,9 @@ def build_report_sheet(
     for col_idx, val in enumerate(ov_vals, 1):
         cell = ws.cell(row=current_row, column=col_idx, value=val)
         cell.font = _font(bold=True, size=11)
-        cell.fill = _fill("D6E4F0")
+        cell.fill = _fill("FFFFFF")
         cell.alignment = _center()
+        cell.border = FULL_BORDER
     current_row += 2
 
     # Notes
