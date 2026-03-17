@@ -282,9 +282,6 @@ def build_report_sheet(
             stats     = row_data["stats"]
             bg = C_ALT_ROW if i % 2 == 0 else "FFFFFF"
 
-            dist_cell_ref = f"{get_column_letter(COL_DIST)}{current_row}"
-            raw_sheet     = f"'{raw_data_sheet_name}'"
-
             # ── Populate cells ───────────────────────────────────────────
             cells_vals = {
                 COL_CLUB:   club,
@@ -296,30 +293,13 @@ def build_report_sheet(
                 COL_NOTES:  "",
             }
 
-            # Static computed values (Python-calculated, will match formula)
+            # Static computed values from Python
             cells_vals[COL_TRAW]  = stats["target_raw"] or ""
             cells_vals[COL_ARAW]  = stats["actual_raw"] or ""
             cells_vals[COL_TPCT]  = stats["target_pct"]
             cells_vals[COL_APCT]  = stats["actual_pct"]
-            cells_vals[COL_GOAL]  = (
-                f'=IFERROR({get_column_letter(COL_APCT)}{current_row}/'
-                f'{get_column_letter(COL_TPCT)}{current_row},"")'
-            )
+            cells_vals[COL_GOAL]  = stats["actual_pct"] / stats["target_pct"] if (stats["actual_pct"] is not None and stats["target_pct"]) else ""
             cells_vals[COL_STATUS] = stats["goal_status"] or ""
-
-            # ── Live formulas for distance-dependent cols ────────────────
-            # Target (raw) formula
-            if dist is not None:
-                if ttype == "Proximity":
-                    cells_vals[COL_TRAW] = _formula_target_proximity(dist_cell_ref, level)
-                else:
-                    cells_vals[COL_TRAW] = (
-                        f'=IFERROR(CONCATENATE("+/- ",'
-                        f'TEXT({_formula_target_range(dist_cell_ref, level)[1:]},"0")," yds"),"")'
-                    )
-
-                # Target % formula
-                cells_vals[COL_TPCT] = _formula_target_rate(dist_cell_ref, level)
 
             # Write all cells
             for col_idx, val in cells_vals.items():
