@@ -109,8 +109,17 @@ def _parse_direction_value(val: str, pos_dir: str = "R") -> float | None:
     return -num
 
 
+def _decode(file_bytes: bytes) -> str:
+    for enc in ("utf-8-sig", "utf-8", "latin-1", "windows-1252"):
+        try:
+            return file_bytes.decode(enc)
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return file_bytes.decode("latin-1", errors="replace")
+
+
 def parse_trackman(file_bytes: bytes) -> pl.DataFrame:
-    content = file_bytes.decode("utf-8-sig")
+    content = _decode(file_bytes)
     df = pl.read_csv(
         io.StringIO(content),
         infer_schema_length=1000,
@@ -176,7 +185,7 @@ def parse_trackman(file_bytes: bytes) -> pl.DataFrame:
 
 
 def parse_foresight(file_bytes: bytes) -> pl.DataFrame:
-    content = file_bytes.decode("utf-8-sig")
+    content = _decode(file_bytes)
     df = pl.read_csv(
         io.StringIO(content),
         skip_rows=1,
