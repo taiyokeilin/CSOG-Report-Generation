@@ -25,11 +25,8 @@ def get_drive_service():
 
 def drive_secrets_configured() -> bool:
     try:
-        return (
-            "google_service_account" in st.secrets
-            and "drive_input_folder_id" in st.secrets
-            and "drive_output_parent_id" in st.secrets
-        )
+        keys = list(st.secrets.keys())
+        return "google_service_account" in keys and "drive_input_folder_id" in keys
     except Exception:
         return False
 
