@@ -158,7 +158,7 @@ if df is not None:
 
     configs = st.session_state.club_configs
 
-    header_cols = st.columns([0.4, 2.2, 1.2, 2.2, 1.5, 1.6, 1.0])
+    header_cols = st.columns([0.7, 1.8, 1.2, 2.2, 1.5, 1.6, 1.0])
     header_cols[0].markdown("**Include**")
     header_cols[1].markdown("**Club**")
     header_cols[2].markdown("**Skill**")
@@ -168,7 +168,7 @@ if df is not None:
     header_cols[6].markdown("**Shots**")
 
     for idx, cfg in enumerate(configs):
-        row_cols = st.columns([0.4, 2.2, 1.2, 2.2, 1.5, 1.6, 1.0])
+        row_cols = st.columns([0.7, 1.8, 1.2, 2.2, 1.5, 1.6, 1.0])
 
         cfg["include"] = row_cols[0].checkbox(
             "", value=cfg["include"], key=f"inc_{idx}", label_visibility="collapsed"
