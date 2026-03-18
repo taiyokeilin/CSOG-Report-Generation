@@ -33,6 +33,7 @@ st.markdown('<p class="sub-header">Upload a launch monitor CSV → configure clu
 
 # ── SECTION 1: Load Data File ─────────────────────────────────────────────
 st.markdown('<p class="section-header">1 · Load Data File</p>', unsafe_allow_html=True)
+st.write("Drive configured:", drive_secrets_configured())
 
 monitor_type = st.selectbox(
     "Launch Monitor",
