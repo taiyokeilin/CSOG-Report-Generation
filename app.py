@@ -34,10 +34,12 @@ st.markdown('<p class="sub-header">Upload a launch monitor CSV → configure clu
 # ── SECTION 1: Load Data File ─────────────────────────────────────────────
 st.markdown('<p class="section-header">1 · Load Data File</p>', unsafe_allow_html=True)
 
-try:
-    st.write("All secret keys:", list(st.secrets.keys()))
-except Exception as e:
-    st.write("Error:", e)
+def drive_secrets_configured() -> bool:
+    try:
+        keys = list(st.secrets.keys())
+        return "google_service_account" in keys and "drive_input_folder_id" in keys
+    except Exception:
+        return False
 
 monitor_type = st.selectbox(
     "Launch Monitor",
