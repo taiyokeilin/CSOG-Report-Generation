@@ -33,7 +33,12 @@ st.markdown('<p class="sub-header">Upload a launch monitor CSV → configure clu
 
 # ── SECTION 1: Load Data File ─────────────────────────────────────────────
 st.markdown('<p class="section-header">1 · Load Data File</p>', unsafe_allow_html=True)
-st.write("Drive configured:", drive_secrets_configured())
+try:
+    st.write("service_account:", "google_service_account" in st.secrets)
+    st.write("input_folder:", "drive_input_folder_id" in st.secrets)
+    st.write("output_parent:", "drive_output_parent_id" in st.secrets)
+except Exception as e:
+    st.write("Error:", e)
 
 monitor_type = st.selectbox(
     "Launch Monitor",
