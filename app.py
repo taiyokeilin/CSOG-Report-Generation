@@ -124,13 +124,13 @@ st.markdown('<p class="section-header">2 · Session Details</p>', unsafe_allow_h
 
 c1, c2, c3, c4 = st.columns(4)
 with c1:
-    player_name = st.text_input("Player Name", placeholder="e.g. Joe Matzek")
+    player_name = st.text_input("Player Name", placeholder="e.g. Dave Maslen")
 with c2:
-    coach_name = st.text_input("Coach Name", placeholder="e.g. David Maslen, PGA")
+    coach_name = st.text_input("Coach Name", placeholder="e.g. Dave Maslen")
 with c3:
     session_date = st.date_input("Session Date", value=date.today())
 with c4:
-    week_label = st.text_input("Week / Label", placeholder="e.g. Week 12")
+    week_label = st.text_input("Week", placeholder="e.g. 5")
 
 
 # ── SECTION 3: Club Configuration ────────────────────────────────────────
@@ -361,4 +361,3 @@ if df is not None:
                 )
 else:
     st.info("Load a file above to get started.")
-# redeploy
