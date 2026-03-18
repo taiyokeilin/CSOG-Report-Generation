@@ -163,7 +163,7 @@ def build_report_sheet(
 
     # Column widths
     ws.column_dimensions["A"].width = 15
-    ws.column_dimensions["B"].width = 8
+    ws.column_dimensions["B"].width = 9.5
     ws.column_dimensions["C"].width = 18
     ws.column_dimensions["D"].width = 12
     ws.column_dimensions["E"].width = 14
@@ -336,20 +336,24 @@ def build_report_sheet(
     ws.row_dimensions[current_row].height = 22
     current_row += 1
 
-    _col_header_row(ws, current_row, [
-        "Attempts", "Successes", "Success %", "Goals", "Goals Met", "Goal %", "", "", "", "", "", "", ""
-    ], NCOLS)
+    for col_idx, h in enumerate(["Attempts", "Successes", "Success %", "Goals", "Goals Met", "Goal %"], 1):
+        cell = ws.cell(row=current_row, column=col_idx, value=h)
+        cell.font = _font(bold=True, size=10)
+        cell.alignment = _center()
+        cell.border = FULL_BORDER
     ws.row_dimensions[current_row].height = 22
     current_row += 1
 
     ov = overall
-    ov_vals = [
-        ov["total_attempts"], ov["total_successes"],
-        f'{round(ov["success_pct"] * 100):.0f}%' if ov["success_pct"] is not None else "",
-        ov["goals_total"], ov["goals_met"],
-        f'{round(ov["goal_pct"] * 100):.0f}%' if ov["goal_pct"] is not None else "",
-    ]
-    for col_idx, val in enumerate(ov_vals, 1):
+    ov_vals = {
+        1: ov["total_attempts"],
+        2: ov["total_successes"],
+        3: f'{round(ov["success_pct"] * 100):.0f}%' if ov["success_pct"] is not None else "",
+        4: ov["goals_total"],
+        5: ov["goals_met"],
+        6: f'{round(ov["goal_pct"] * 100):.0f}%' if ov["goal_pct"] is not None else "",
+    }
+    for col_idx, val in ov_vals.items():
         cell = ws.cell(row=current_row, column=col_idx, value=val)
         cell.font = _font(bold=True, size=11)
         cell.fill = _fill("FFFFFF")
