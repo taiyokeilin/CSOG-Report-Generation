@@ -1,50 +1,100 @@
 """
-Google Drive upload via OAuth2 service account or user OAuth.
-For Streamlit Community Cloud, credentials are stored in st.secrets.
+Google Drive integration via service account.
+Secrets required in Streamlit secrets:
+  [google_service_account]   — service account JSON fields
+  drive_input_folder_id      — folder ID to browse for input CSVs
+  drive_output_parent_id     — parent folder ID whose subfolders are upload destinations
 """
 import io
-import json
 import streamlit as st
 
 
 def get_drive_service():
-    """Build a Google Drive API service from Streamlit secrets."""
     try:
         from google.oauth2 import service_account
         from googleapiclient.discovery import build
-
         creds_dict = dict(st.secrets["google_service_account"])
         creds = service_account.Credentials.from_service_account_info(
             creds_dict,
-            scopes=["https://www.googleapis.com/auth/drive.file"],
+            scopes=["https://www.googleapis.com/auth/drive"],
         )
         return build("drive", "v3", credentials=creds)
-    except Exception as e:
-        return None, str(e)
+    except Exception:
+        return None
 
 
-def list_drive_folders(service):
-    """Return list of (name, id) tuples for Drive folders accessible to the service account."""
+def drive_secrets_configured() -> bool:
     try:
+        return (
+            "google_service_account" in st.secrets
+            and "drive_input_folder_id" in st.secrets
+            and "drive_output_parent_id" in st.secrets
+        )
+    except Exception:
+        return False
+
+
+def list_input_files(service) -> list[dict]:
+    """List CSV and XLSX files in the configured input folder."""
+    folder_id = st.secrets["drive_input_folder_id"]
+    try:
+        q = (
+            f"'{folder_id}' in parents and trashed=false and ("
+            "mimeType='text/csv' or "
+            "mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or "
+            "mimeType='text/plain'"
+            ")"
+        )
         results = service.files().list(
-            q="mimeType='application/vnd.google-apps.folder' and trashed=false",
+            q=q,
+            fields="files(id, name, mimeType, modifiedTime)",
+            orderBy="modifiedTime desc",
+            pageSize=100,
+        ).execute()
+        return results.get("files", [])
+    except Exception as e:
+        st.error(f"Could not list Drive files: {e}")
+        return []
+
+
+def download_drive_file(service, file_id: str) -> bytes:
+    """Download a file from Drive by ID, returns raw bytes."""
+    request = service.files().get_media(fileId=file_id)
+    buffer = io.BytesIO()
+    from googleapiclient.http import MediaIoBaseDownload
+    downloader = MediaIoBaseDownload(buffer, request)
+    done = False
+    while not done:
+        _, done = downloader.next_chunk()
+    buffer.seek(0)
+    return buffer.read()
+
+
+def list_output_subfolders(service) -> list[tuple[str, str]]:
+    """List subfolders inside the configured output parent folder. Returns [(name, id)]."""
+    parent_id = st.secrets["drive_output_parent_id"]
+    try:
+        q = f"'{parent_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
+        results = service.files().list(
+            q=q,
             fields="files(id, name)",
-            pageSize=50,
+            orderBy="name",
+            pageSize=100,
         ).execute()
         folders = results.get("files", [])
         return [(f["name"], f["id"]) for f in folders]
     except Exception as e:
+        st.error(f"Could not list output folders: {e}")
         return []
 
 
-def upload_to_drive(service, file_bytes: bytes, filename: str, folder_id: str = None) -> str:
-    """Upload Excel bytes to Drive. Returns the file URL."""
+def upload_to_drive(service, file_bytes: bytes, filename: str, folder_id: str) -> str:
+    """Upload Excel bytes to a Drive folder. Returns the webViewLink."""
     from googleapiclient.http import MediaIoBaseUpload
-
-    file_metadata = {"name": filename}
-    if folder_id:
-        file_metadata["parents"] = [folder_id]
-
+    file_metadata = {
+        "name": filename,
+        "parents": [folder_id],
+    }
     media = MediaIoBaseUpload(
         io.BytesIO(file_bytes),
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -56,7 +106,3 @@ def upload_to_drive(service, file_bytes: bytes, filename: str, folder_id: str = 
         fields="id, webViewLink",
     ).execute()
     return uploaded.get("webViewLink", "")
-
-
-def drive_secrets_configured() -> bool:
-    return "google_service_account" in st.secrets
