@@ -25,8 +25,11 @@ def get_drive_service():
 
 def drive_secrets_configured() -> bool:
     try:
-        keys = list(st.secrets.keys())
-        return "google_service_account" in keys and "drive_input_folder_id" in keys
+        return (
+            "google_service_account" in st.secrets
+            and "drive_input_folder_id" in st.secrets
+            and "drive_output_parent_id" in st.secrets
+        )
     except Exception:
         return False
 
@@ -68,20 +71,15 @@ def download_drive_file(service, file_id: str) -> bytes:
 
 
 def list_output_subfolders(service) -> list[tuple[str, str]]:
-    """List subfolders inside the configured output parent folder. Returns [(name, id)]."""
+    """Return the configured output folder itself as the only upload destination."""
     parent_id = st.secrets["drive_output_parent_id"]
     try:
-        q = f"'{parent_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
-        results = service.files().list(
-            q=q,
-            fields="files(id, name)",
-            orderBy="name",
-            pageSize=100,
+        result = service.files().get(
+            fileId=parent_id, fields="id, name"
         ).execute()
-        folders = results.get("files", [])
-        return [(f["name"], f["id"]) for f in folders]
+        return [(result["name"], result["id"])]
     except Exception as e:
-        st.error(f"Could not list output folders: {e}")
+        st.error(f"Could not access output folder: {e}")
         return []
 
 
