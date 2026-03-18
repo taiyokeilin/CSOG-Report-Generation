@@ -34,6 +34,20 @@ st.markdown('<p class="sub-header">Upload a launch monitor CSV → configure clu
 # ── SECTION 1: Load Data File ─────────────────────────────────────────────
 st.markdown('<p class="section-header">1 · Load Data File</p>', unsafe_allow_html=True)
 
+
+try:
+    service = get_drive_service()
+    parent_id = st.secrets["drive_output_parent_id"]
+    results = service.files().list(
+        q=f"'{parent_id}' in parents and trashed=false",
+        fields="files(id, name, mimeType)",
+        pageSize=20,
+    ).execute()
+    st.write("Subfolders found:", results.get("files", []))
+except Exception as e:
+    st.write("Error:", e)
+
+
 monitor_type = st.selectbox(
     "Launch Monitor",
     ["TrackMan", "Foresight", "FlightScope"],
