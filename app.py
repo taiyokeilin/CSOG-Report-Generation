@@ -85,9 +85,9 @@ with c4:
 # ── SECTION 3: Club Configuration ────────────────────────────────────────
 st.markdown('<p class="section-header">3 · Configure Clubs</p>', unsafe_allow_html=True)
 
-SECTIONS = ["Putting", "Wedge Play", "Approach", "Driving", "Other"]
+SKILLS = ["Putting", "Wedge Play", "Approach", "Driving", "Other"]
 
-SECTION_TARGET_TYPES = {
+SKILL_TARGET_TYPES = {
     "Wedge Play": ["Proximity", "Distance Control"],
     "Approach":   ["Proximity", "Distance Control"],
     "Driving":    ["Distance", "Dispersion"],
@@ -138,7 +138,7 @@ def _default_club_state(club):
         "level": 5,
         "selected_target_types": DEFAULT_SELECTED.get(section, ["Proximity"]),
         "distance_yd": _infer_distance(club),
-        "section": section,
+        "skill": section,
         "include": True,
     }
 
@@ -161,7 +161,7 @@ if df is not None:
     header_cols = st.columns([0.4, 2.2, 1.2, 2.2, 1.5, 1.6, 1.0])
     header_cols[0].markdown("**Include**")
     header_cols[1].markdown("**Club**")
-    header_cols[2].markdown("**Section**")
+    header_cols[2].markdown("**Skill**")
     header_cols[3].markdown("**Target Types**")
     header_cols[4].markdown("**Distance (yd)**")
     header_cols[5].markdown("**Level (1–12)**")
@@ -177,15 +177,15 @@ if df is not None:
             f"<div style='padding-top:8px'><b>{cfg['club']}</b></div>", unsafe_allow_html=True
         )
 
-        prev_section = cfg["section"]
-        cfg["section"] = row_cols[2].selectbox(
-            "", SECTIONS, index=SECTIONS.index(cfg["section"]),
+        prev_section = cfg["skill"]
+        cfg["skill"] = row_cols[2].selectbox(
+            "", SKILLS, index=SKILLS.index(cfg["skill"]),
             key=f"sec_{idx}", label_visibility="collapsed"
         )
-        if cfg["section"] != prev_section:
-            cfg["selected_target_types"] = DEFAULT_SELECTED.get(cfg["section"], ["Proximity"])
+        if cfg["skill"] != prev_section:
+            cfg["selected_target_types"] = DEFAULT_SELECTED.get(cfg["skill"], ["Proximity"])
 
-        available_types = SECTION_TARGET_TYPES.get(cfg["section"], ["Proximity", "Distance Control"])
+        available_types = SKILL_TARGET_TYPES.get(cfg["skill"], ["Proximity", "Distance Control"])
         valid_selected = [t for t in cfg.get("selected_target_types", []) if t in available_types]
         if not valid_selected:
             valid_selected = [available_types[0]]
@@ -231,7 +231,7 @@ if df is not None:
                     "level": cfg["level"],
                     "target_type": ttype,
                     "distance_yd": cfg["distance_yd"],
-                    "section": cfg["section"],
+                    "section": cfg["skill"],
                 })
         return rows
 
