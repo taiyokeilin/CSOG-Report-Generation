@@ -5,7 +5,11 @@ from datetime import date
 
 from parsers import parse_file
 from report_builder import build_excel_report
-from drive_upload import drive_secrets_configured, get_drive_service, list_drive_folders, upload_to_drive
+from drive_upload import (
+    drive_secrets_configured, get_drive_service,
+    list_input_files, download_drive_file,
+    list_output_subfolders, upload_to_drive,
+)
 
 st.set_page_config(
     page_title="Golf Practice Report Generator",
@@ -27,45 +31,92 @@ st.markdown('<p class="main-header">⛳ Golf Practice Report Generator</p>', uns
 st.markdown('<p class="sub-header">Upload a launch monitor CSV → configure clubs → download your report</p>', unsafe_allow_html=True)
 
 
-# ── SECTION 1: Upload & Parse ─────────────────────────────────────────────
-st.markdown('<p class="section-header">1 · Upload Data File</p>', unsafe_allow_html=True)
+# ── SECTION 1: Load Data File ─────────────────────────────────────────────
+st.markdown('<p class="section-header">1 · Load Data File</p>', unsafe_allow_html=True)
 
-col1, col2 = st.columns([2, 1])
-with col1:
+monitor_type = st.selectbox(
+    "Launch Monitor",
+    ["TrackMan", "Foresight", "FlightScope"],
+    help="TrackMan and Foresight: CSV. FlightScope: XLSX.",
+)
+
+drive_available = drive_secrets_configured()
+
+if drive_available:
+    tab_drive, tab_local = st.tabs(["☁️ Browse Google Drive", "💻 Upload from Computer"])
+else:
+    tab_local = st.container()
+    tab_drive = None
+
+df = None
+
+
+def _parse_and_show(file_bytes, filename):
+    """Parse bytes and return df, showing success/error."""
+    try:
+        with st.spinner("Parsing file…"):
+            result = parse_file(file_bytes, monitor_type.lower())
+        try:
+            n_shots = len(result)
+            n_clubs = result["club"].n_unique()
+        except Exception:
+            n_shots = len(result)
+            n_clubs = result["club"].nunique()
+        st.success(f"✅ Loaded **{filename}** — {n_shots} shots across {n_clubs} clubs")
+        with st.expander("Preview raw data", expanded=False):
+            try:
+                st.dataframe(result.head(30).to_pandas(), use_container_width=True)
+            except Exception:
+                st.dataframe(result.head(30), use_container_width=True)
+        return result
+    except Exception as e:
+        st.error(f"❌ Failed to parse file: {e}")
+        return None
+
+
+if drive_available:
+    with tab_drive:
+        service = get_drive_service()
+        if service:
+            files = list_input_files(service)
+            if files:
+                file_names = [f["name"] for f in files]
+                selected_name = st.selectbox(
+                    "Select a file from Drive",
+                    file_names,
+                    key="drive_file_select",
+                )
+                selected_file = next(f for f in files if f["name"] == selected_name)
+
+                if st.button("Load from Drive", key="load_drive"):
+                    with st.spinner("Downloading from Drive…"):
+                        file_bytes = download_drive_file(service, selected_file["id"])
+                    st.session_state.file_bytes = file_bytes
+                    st.session_state.file_name = selected_name
+                    st.session_state.df = _parse_and_show(file_bytes, selected_name)
+                elif "df" in st.session_state and st.session_state.get("file_name") == selected_name:
+                    df = st.session_state.df
+            else:
+                st.info("No CSV or XLSX files found in the configured Drive folder.")
+        else:
+            st.error("Could not connect to Google Drive. Check your secrets configuration.")
+
+with tab_local:
     uploaded_file = st.file_uploader(
         "Upload your launch monitor file",
         type=["csv", "xlsx"],
         help="TrackMan and Foresight: CSV. FlightScope: XLSX.",
+        key="local_upload",
     )
-with col2:
-    monitor_type = st.selectbox(
-        "Launch Monitor",
-        ["TrackMan", "Foresight", "FlightScope"],
-        help="Select the device that recorded this session.",
-    )
-
-df = None
-
-if uploaded_file:
-    try:
+    if uploaded_file:
         file_bytes = uploaded_file.read()
-        with st.spinner("Parsing file…"):
-            df = parse_file(file_bytes, monitor_type.lower())
-        try:
-            n_shots = len(df)
-            n_clubs = df["club"].n_unique()
-        except Exception:
-            n_shots = len(df)
-            n_clubs = df["club"].nunique()
-        st.success(f"✅ Loaded **{n_shots} shots** across **{n_clubs} clubs**")
-        with st.expander("Preview raw data", expanded=False):
-            try:
-                st.dataframe(df.head(30).to_pandas(), use_container_width=True)
-            except Exception:
-                st.dataframe(df.head(30), use_container_width=True)
-    except Exception as e:
-        st.error(f"❌ Failed to parse file: {e}")
-        df = None
+        st.session_state.file_bytes = file_bytes
+        st.session_state.file_name = uploaded_file.name
+        st.session_state.df = _parse_and_show(file_bytes, uploaded_file.name)
+
+# Pull df from session state (set by either tab)
+if "df" in st.session_state and st.session_state.df is not None:
+    df = st.session_state.df
 
 
 # ── SECTION 2: Session Info ───────────────────────────────────────────────
@@ -216,7 +267,7 @@ if df is not None:
     st.session_state.club_configs = configs
 
 
-# ── SECTION 4: Generate Report ───────────────────────────────────────────
+# ── SECTION 4: Generate & Download Report ────────────────────────────────
 st.markdown('<p class="section-header">4 · Generate & Download Report</p>', unsafe_allow_html=True)
 
 if df is not None:
@@ -256,17 +307,18 @@ if df is not None:
                         st.session_state.report_filename = (
                             f"{player_name.replace(' ', '_')}_{session_date.strftime('%Y%m%d')}.xlsx"
                         )
-                        st.success("✅ Report generated successfully!")
+                        st.success("✅ Report generated!")
                     except Exception as e:
                         st.error(f"❌ Error generating report: {e}")
                         raise e
 
     if "excel_bytes" in st.session_state:
+        st.markdown("**Save report:**")
         dl_col, drive_col = st.columns([1, 2])
 
         with dl_col:
             st.download_button(
-                label="⬇️ Download Excel Report",
+                label="⬇️ Download to Computer",
                 data=st.session_state.excel_bytes,
                 file_name=st.session_state.report_filename,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -275,42 +327,37 @@ if df is not None:
 
         with drive_col:
             if drive_secrets_configured():
-                with st.expander("☁️ Upload to Google Drive", expanded=False):
-                    service = get_drive_service()
-                    if service and not isinstance(service, tuple):
-                        folders = list_drive_folders(service)
-                        if folders:
-                            folder_names = ["(Root / My Drive)"] + [f[0] for f in folders]
-                            folder_ids   = [None] + [f[1] for f in folders]
-                            selected_idx = st.selectbox(
-                                "Select Drive folder",
-                                range(len(folder_names)),
-                                format_func=lambda i: folder_names[i],
-                            )
-                            selected_folder_id = folder_ids[selected_idx]
-                        else:
-                            st.info("No folders found — file will upload to root Drive.")
-                            selected_folder_id = None
-
-                        if st.button("Upload to Drive", use_container_width=True):
+                service = get_drive_service()
+                if service:
+                    subfolders = list_output_subfolders(service)
+                    if subfolders:
+                        folder_names = [f[0] for f in subfolders]
+                        folder_ids   = [f[1] for f in subfolders]
+                        selected_idx = st.selectbox(
+                            "Upload to Drive folder",
+                            range(len(folder_names)),
+                            format_func=lambda i: folder_names[i],
+                            key="output_folder_select",
+                        )
+                        if st.button("☁️ Upload to Drive", use_container_width=True):
                             with st.spinner("Uploading…"):
                                 try:
                                     link = upload_to_drive(
                                         service,
                                         st.session_state.excel_bytes,
                                         st.session_state.report_filename,
-                                        selected_folder_id,
+                                        folder_ids[selected_idx],
                                     )
                                     st.success(f"✅ Uploaded! [Open in Drive]({link})")
                                 except Exception as e:
                                     st.error(f"Upload failed: {e}")
                     else:
-                        st.error("Could not connect to Google Drive. Check secrets configuration.")
+                        st.info("No subfolders found in the configured output folder.")
+                else:
+                    st.error("Could not connect to Google Drive.")
             else:
                 st.info(
-                    "☁️ **Google Drive upload not configured.**\n\n"
-                    "To enable, add a `[google_service_account]` section to your Streamlit secrets. "
-                    "See the README for setup instructions.",
+                    "☁️ Google Drive not configured. See README for setup instructions."
                 )
 else:
-    st.info("Upload a file above to get started.")
+    st.info("Load a file above to get started.")
