@@ -75,7 +75,17 @@ client_email = "your-service-account@project.iam.gserviceaccount.com"
 client_id = "123456789"
 auth_uri = "https://accounts.google.com/o/oauth2/auth"
 token_uri = "https://oauth2.googleapis.com/token"
+
+# Folder IDs (from the URL when you open the folder in Drive)
+drive_input_folder_id = "your-input-folder-id"
+drive_output_parent_id = "your-output-parent-folder-id"
 ```
+
+**Finding folder IDs**: Open the folder in Google Drive — the ID is the long string at the end of the URL:
+`https://drive.google.com/drive/folders/THIS_PART_IS_THE_ID`
+
+- `drive_input_folder_id` — the folder containing your raw launch monitor CSVs
+- `drive_output_parent_id` — the parent folder whose **subfolders** will appear as upload destinations in the app
 
 For **local development**, create `.streamlit/secrets.toml` with the same content (this file is gitignored by default — never commit it).
 
