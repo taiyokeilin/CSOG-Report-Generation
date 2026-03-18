@@ -33,10 +33,9 @@ st.markdown('<p class="sub-header">Upload a launch monitor CSV → configure clu
 
 # ── SECTION 1: Load Data File ─────────────────────────────────────────────
 st.markdown('<p class="section-header">1 · Load Data File</p>', unsafe_allow_html=True)
+
 try:
-    st.write("service_account:", "google_service_account" in st.secrets)
-    st.write("input_folder:", "drive_input_folder_id" in st.secrets)
-    st.write("output_parent:", "drive_output_parent_id" in st.secrets)
+    st.write("All secret keys:", list(st.secrets.keys()))
 except Exception as e:
     st.write("Error:", e)
 
