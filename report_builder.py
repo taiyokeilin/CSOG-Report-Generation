@@ -98,6 +98,23 @@ def _goal_status_style(cell, status):
         cell.font = _font(size=10)
 
 
+
+def _pct_style(cell, actual_pct, target_pct, size=10):
+    """Color a percentage cell using the same green/amber/red logic as goal status."""
+    if actual_pct is None or target_pct is None or target_pct == 0:
+        cell.font = _font(size=size)
+        return
+    ratio = actual_pct / target_pct
+    if ratio >= 1.0:
+        cell.fill = _fill(C_GREEN)
+        cell.font = _font(color=C_GREEN_FG, size=size)
+    elif ratio >= 0.7:
+        cell.fill = _fill(C_AMBER)
+        cell.font = _font(color=C_AMBER_FG, size=size)
+    else:
+        cell.fill = _fill(C_RED_BG)
+        cell.font = _font(color=C_RED_FG, size=size)
+
 # ── Excel formula helpers ──────────────────────────────────────────────────
 def _formula_target_proximity(dist_cell: str, level: int) -> str:
     """
@@ -318,9 +335,11 @@ def build_report_sheet(
 
             apct_cell = ws.cell(row=current_row, column=COL_APCT)
             apct_cell.number_format = "0%"
+            _pct_style(apct_cell, stats.get("actual_pct"), stats.get("target_pct"))
 
             goal_cell = ws.cell(row=current_row, column=COL_GOAL)
             goal_cell.number_format = "0%"
+            _pct_style(goal_cell, stats.get("actual_pct"), stats.get("target_pct"))
 
             status_cell = ws.cell(row=current_row, column=COL_STATUS)
             _goal_status_style(status_cell, stats.get("goal_status"))
@@ -359,6 +378,11 @@ def build_report_sheet(
         cell.fill = _fill("FFFFFF")
         cell.alignment = _center()
         cell.border = FULL_BORDER
+    # Color Success % (col 3) and Goal % (col 6)
+    if ov["success_pct"] is not None:
+        _pct_style(ws.cell(row=current_row, column=3), ov["success_pct"], 1.0, size=11)
+    if ov["goal_pct"] is not None:
+        _pct_style(ws.cell(row=current_row, column=6), ov["goal_pct"], 1.0, size=11)
     current_row += 2
 
     # Notes
