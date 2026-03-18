@@ -82,10 +82,6 @@ def _col_header_row(ws, row, headers: list, ncols: int):
         cell.fill = _fill(C_COL_HDR_BG)
         cell.alignment = _center()
         cell.border = FULL_BORDER
-    for col_idx in range(len(headers) + 1, ncols + 1):
-        cell = ws.cell(row=row, column=col_idx)
-        cell.fill = _fill(C_COL_HDR_BG)
-        cell.border = FULL_BORDER
 
 
 def _goal_status_style(cell, status):
@@ -150,7 +146,7 @@ def build_report_sheet(
     raw_data_sheet_name: str,
     overall: dict,
 ):
-    NCOLS = 14
+    NCOLS = 13
     COL_CLUB   = 1
     COL_LEVEL  = 2
     COL_TTYPE  = 3
@@ -166,7 +162,7 @@ def build_report_sheet(
     COL_NOTES  = 13
 
     # Column widths
-    ws.column_dimensions["A"].width = 22
+    ws.column_dimensions["A"].width = 15
     ws.column_dimensions["B"].width = 8
     ws.column_dimensions["C"].width = 18
     ws.column_dimensions["D"].width = 12
@@ -179,7 +175,7 @@ def build_report_sheet(
     ws.column_dimensions["K"].width = 10
     ws.column_dimensions["L"].width = 16
     ws.column_dimensions["M"].width = 22
-    ws.column_dimensions["N"].width = 22
+    ws.column_dimensions["N"].width = 0
 
     current_row = 1
 
@@ -193,13 +189,6 @@ def build_report_sheet(
     meta_row = current_row
     for c in range(1, NCOLS + 1):
         ws.cell(row=meta_row, column=c).fill = _fill("FFFFFF")
-
-    # A2:B2 — date, merged, bold, centered
-    ws.merge_cells(start_row=meta_row, start_column=1, end_row=meta_row, end_column=2)
-    date_cell = ws.cell(row=meta_row, column=1, value=session_info.get("date", ""))
-    date_cell.font = _font(bold=True, size=11)
-    date_cell.fill = _fill("FFFFFF")
-    date_cell.alignment = _center()
 
     # E2 — "Player:" right-justified
     player_label = ws.cell(row=meta_row, column=5, value="Player:")
@@ -230,20 +219,33 @@ def build_report_sheet(
     ws.row_dimensions[meta_row].height = 20
     current_row += 1
 
-    # ── Row 3: Week: | Week value ─────────────────────────────────────────────
+    # ── Row 3: Date at E3, Week at J3 ────────────────────────────────────────
     week_row = current_row
     for c in range(1, NCOLS + 1):
         ws.cell(row=week_row, column=c).fill = _fill("FFFFFF")
 
-    # E3 — "Week:" right-justified
-    week_label_cell = ws.cell(row=week_row, column=5, value="Week:")
+    # E3 — "Date:" right-justified
+    date_label_cell = ws.cell(row=week_row, column=5, value="Date:")
+    date_label_cell.font = _font(bold=True, size=11)
+    date_label_cell.fill = _fill("FFFFFF")
+    date_label_cell.alignment = Alignment(horizontal="right", vertical="center")
+
+    # F3:H3 — date value, merged, left-justified
+    ws.merge_cells(start_row=week_row, start_column=6, end_row=week_row, end_column=8)
+    date_val = ws.cell(row=week_row, column=6, value=session_info.get("date", ""))
+    date_val.font = _font(size=11)
+    date_val.fill = _fill("FFFFFF")
+    date_val.alignment = _left()
+
+    # J3 — "Week:" right-justified
+    week_label_cell = ws.cell(row=week_row, column=10, value="Week:")
     week_label_cell.font = _font(bold=True, size=11)
     week_label_cell.fill = _fill("FFFFFF")
     week_label_cell.alignment = Alignment(horizontal="right", vertical="center")
 
-    # F3:H3 — week value, merged, left-justified
-    ws.merge_cells(start_row=week_row, start_column=6, end_row=week_row, end_column=8)
-    week_val = ws.cell(row=week_row, column=6, value=session_info.get("week", ""))
+    # K3:L3 — week value, merged, left-justified
+    ws.merge_cells(start_row=week_row, start_column=11, end_row=week_row, end_column=12)
+    week_val = ws.cell(row=week_row, column=11, value=session_info.get("week", ""))
     week_val.font = _font(size=11)
     week_val.fill = _fill("FFFFFF")
     week_val.alignment = _left()
@@ -268,7 +270,7 @@ def build_report_sheet(
             "Club", "Level", "Target Type", "Distance (yd)",
             "Target (raw)", "Actual (raw)", "Target %",
             "Attempts", "Successes", "Actual %", "Goal %",
-            "Goal Status", "Notes", ""
+            "Goal Status", "Notes"
         ]
         _col_header_row(ws, current_row, col_headers, NCOLS)
         ws.row_dimensions[current_row].height = 30
@@ -312,13 +314,13 @@ def build_report_sheet(
             # No special cell highlighting — all white
 
             tpct_cell = ws.cell(row=current_row, column=COL_TPCT)
-            tpct_cell.number_format = "0.0%"
+            tpct_cell.number_format = "0%"
 
             apct_cell = ws.cell(row=current_row, column=COL_APCT)
-            apct_cell.number_format = "0.0%"
+            apct_cell.number_format = "0%"
 
             goal_cell = ws.cell(row=current_row, column=COL_GOAL)
-            goal_cell.number_format = "0.0%"
+            goal_cell.number_format = "0%"
 
             status_cell = ws.cell(row=current_row, column=COL_STATUS)
             _goal_status_style(status_cell, stats.get("goal_status"))
@@ -335,7 +337,7 @@ def build_report_sheet(
     current_row += 1
 
     _col_header_row(ws, current_row, [
-        "Attempts", "Successes", "Success %", "Goals", "Goals Met", "", "Goal %", "", "", "", "", "", "", ""
+        "Attempts", "Successes", "Success %", "Goals", "Goals Met", "Goal %", "", "", "", "", "", "", ""
     ], NCOLS)
     ws.row_dimensions[current_row].height = 22
     current_row += 1
@@ -343,9 +345,9 @@ def build_report_sheet(
     ov = overall
     ov_vals = [
         ov["total_attempts"], ov["total_successes"],
-        f'{ov["success_pct"]:.1%}' if ov["success_pct"] is not None else "",
-        ov["goals_total"], ov["goals_met"], "",
-        f'{ov["goal_pct"]:.1%}' if ov["goal_pct"] is not None else "",
+        f'{round(ov["success_pct"] * 100):.0f}%' if ov["success_pct"] is not None else "",
+        ov["goals_total"], ov["goals_met"],
+        f'{round(ov["goal_pct"] * 100):.0f}%' if ov["goal_pct"] is not None else "",
     ]
     for col_idx, val in enumerate(ov_vals, 1):
         cell = ws.cell(row=current_row, column=col_idx, value=val)
@@ -360,7 +362,7 @@ def build_report_sheet(
     current_row += 1
     ws.merge_cells(
         start_row=current_row, start_column=1,
-        end_row=current_row + 4, end_column=NCOLS
+        end_row=current_row + 4, end_column=13
     )
     notes_cell = ws.cell(row=current_row, column=1)
     notes_cell.fill = _fill("F5F5F5")
