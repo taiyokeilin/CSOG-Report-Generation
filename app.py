@@ -34,20 +34,6 @@ st.markdown('<p class="sub-header">Upload a launch monitor CSV → configure clu
 # ── SECTION 1: Load Data File ─────────────────────────────────────────────
 st.markdown('<p class="section-header">1 · Load Data File</p>', unsafe_allow_html=True)
 
-
-try:
-    service = get_drive_service()
-    parent_id = st.secrets["drive_output_parent_id"]
-    results = service.files().list(
-        q=f"'{parent_id}' in parents and trashed=false",
-        fields="files(id, name, mimeType)",
-        pageSize=20,
-    ).execute()
-    st.write("Subfolders found:", results.get("files", []))
-except Exception as e:
-    st.write("Error:", e)
-
-
 monitor_type = st.selectbox(
     "Launch Monitor",
     ["TrackMan", "Foresight", "FlightScope"],
@@ -345,14 +331,8 @@ if df is not None:
                 if service:
                     subfolders = list_output_subfolders(service)
                     if subfolders:
-                        folder_names = [f[0] for f in subfolders]
-                        folder_ids   = [f[1] for f in subfolders]
-                        selected_idx = st.selectbox(
-                            "Upload to Drive folder",
-                            range(len(folder_names)),
-                            format_func=lambda i: folder_names[i],
-                            key="output_folder_select",
-                        )
+                        folder_name, folder_id = subfolders[0]
+                        st.caption(f"Destination: {folder_name}")
                         if st.button("☁️ Upload to Drive", use_container_width=True):
                             with st.spinner("Uploading…"):
                                 try:
@@ -360,13 +340,13 @@ if df is not None:
                                         service,
                                         st.session_state.excel_bytes,
                                         st.session_state.report_filename,
-                                        folder_ids[selected_idx],
+                                        folder_id,
                                     )
                                     st.success(f"✅ Uploaded! [Open in Drive]({link})")
                                 except Exception as e:
                                     st.error(f"Upload failed: {e}")
                     else:
-                        st.info("No subfolders found in the configured output folder.")
+                        st.info("Could not access the configured output folder.")
                 else:
                     st.error("Could not connect to Google Drive.")
             else:
