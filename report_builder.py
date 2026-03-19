@@ -21,7 +21,7 @@ C_HEADER_BG   = "FFFFFF"
 C_HEADER_FG   = "000000"
 C_SECTION_BG  = "FFFFFF"
 C_SECTION_FG  = "000000"
-C_COL_HDR_BG  = "FFFFFF"
+C_COL_HDR_BG  = "F2F2F2"
 C_DIST_BG     = "FFFFFF"
 C_ALT_ROW     = "FFFFFF"
 C_GREEN       = "E2EFDA"
@@ -181,18 +181,18 @@ def build_report_sheet(
     COL_STATUS = 12
 
     # Column widths
-    ws.column_dimensions["A"].width = 15
-    ws.column_dimensions["B"].width = 9.5
-    ws.column_dimensions["C"].width = 18
-    ws.column_dimensions["D"].width = 12
-    ws.column_dimensions["E"].width = 14
-    ws.column_dimensions["F"].width = 14
-    ws.column_dimensions["G"].width = 10
-    ws.column_dimensions["H"].width = 10
-    ws.column_dimensions["I"].width = 10
-    ws.column_dimensions["J"].width = 10
-    ws.column_dimensions["K"].width = 10
-    ws.column_dimensions["L"].width = 16
+    ws.column_dimensions["A"].width = 19
+    ws.column_dimensions["B"].width = 12
+    ws.column_dimensions["C"].width = 22
+    ws.column_dimensions["D"].width = 15
+    ws.column_dimensions["E"].width = 17
+    ws.column_dimensions["F"].width = 17
+    ws.column_dimensions["G"].width = 13
+    ws.column_dimensions["H"].width = 13
+    ws.column_dimensions["I"].width = 13
+    ws.column_dimensions["J"].width = 13
+    ws.column_dimensions["K"].width = 13
+    ws.column_dimensions["L"].width = 20
     ws.column_dimensions["M"].width = 0
     ws.column_dimensions["N"].width = 0
 
