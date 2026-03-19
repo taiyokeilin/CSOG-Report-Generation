@@ -182,7 +182,7 @@ def build_report_sheet(
 
     # Column widths
     ws.column_dimensions["A"].width = 19
-    ws.column_dimensions["B"].width = 12
+    ws.column_dimensions["B"].width = 13
     ws.column_dimensions["C"].width = 22
     ws.column_dimensions["D"].width = 15
     ws.column_dimensions["E"].width = 17
