@@ -1,4 +1,5 @@
 import re
+import os
 import streamlit as st
 import polars as pl
 from datetime import date
@@ -302,7 +303,8 @@ if df is not None:
                         "week": week_label,
                     }
                     try:
-                        excel_bytes = build_excel_report(df, session_info, active_configs)
+                        logo_path = "logo.png" if os.path.exists("logo.png") else None
+                        excel_bytes = build_excel_report(df, session_info, active_configs, logo_path=logo_path)
                         st.session_state.excel_bytes = excel_bytes
                         st.session_state.report_filename = (
                             f"{player_name.replace(' ', '_')}_{session_date.strftime('%Y%m%d')}.xlsx"
