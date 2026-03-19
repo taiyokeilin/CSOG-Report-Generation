@@ -210,7 +210,7 @@ if df is not None:
 
     configs = st.session_state.club_configs
 
-    level_info = """**Level Reference**
+    level_info = """**Level Multipliers**
 
 | Level | Rate Mult | Prox Mult |
 |-------|-----------|-----------|
@@ -222,7 +222,8 @@ if df is not None:
 | 6 | 0.60 | 1.50 |
 | 7 | 0.70 | 1.25 |
 | 8 | 0.80 | 1.00 |
-| 9–10 | 0.90–1.00 | 1.00 |
+| 9 | 0.90 | 1.00 |
+| 10 | 1.00 | 1.00 |
 | 11 | 1.25 | 0.75 |
 | 12 | 1.50 | 0.50 |
 
@@ -230,15 +231,30 @@ if df is not None:
 
 | Dist (yd) | Proximity (ft) | Range (yd) |
 |-----------|----------------|------------|
-| 20–30 | 6.4–7.2 | 2.0 |
-| 40–70 | 10.4–13.2 | 3.0–4.0 |
-| 80–90 | 14.2 | 4.0 |
-| 100–110 | 16.5 | 5.0 |
-| 120–140 | 19.0 | 5.0 |
-| 150–170 | 23.0 | 6.0 |
-| 180–200 | 28.6 | 6.0–7.0 |
-| 210–220 | 34.4 | 7.0 |
-| 230–250 | 43.2–48.0 | 8.0 |
+| 20 | 6.4 | 2.0 |
+| 30 | 7.2 | 2.0 |
+| 40 | 10.4 | 3.0 |
+| 50 | 13.2 | 3.0 |
+| 60 | 13.2 | 4.0 |
+| 70 | 13.2 | 4.0 |
+| 80 | 14.2 | 4.0 |
+| 90 | 14.2 | 4.0 |
+| 100 | 16.5 | 5.0 |
+| 110 | 16.5 | 5.0 |
+| 120 | 16.5 | 5.0 |
+| 130 | 19.0 | 5.0 |
+| 140 | 19.0 | 5.0 |
+| 150 | 23.0 | 6.0 |
+| 160 | 23.0 | 6.0 |
+| 170 | 23.0 | 6.0 |
+| 180 | 28.6 | 6.0 |
+| 190 | 28.6 | 6.0 |
+| 200 | 28.6 | 7.0 |
+| 210 | 34.4 | 7.0 |
+| 220 | 34.4 | 7.0 |
+| 230 | 43.2 | 8.0 |
+| 240 | 43.2 | 8.0 |
+| 250 | 48.0 | 8.0 |
 """
     header_cols = st.columns([0.7, 1.8, 0.8, 1.2, 2.2, 1.5, 1.6])
     header_cols[0].markdown("**Include**")
@@ -248,8 +264,9 @@ if df is not None:
     header_cols[4].markdown("**Target Types**")
     header_cols[5].markdown("**Distance (yd)**")
     with header_cols[6]:
-        st.markdown("**Level (1–12)**")
-        with st.popover("ℹ️", use_container_width=False):
+        lbl_col, btn_col = st.columns([2, 1])
+        lbl_col.markdown("**Level (1–12)**")
+        with btn_col.popover("ℹ️", use_container_width=False):
             st.markdown(level_info)
 
     for idx, cfg in enumerate(configs):
