@@ -43,7 +43,7 @@ def _border(left=None, right=None, top=None, bottom=None):
 def _fill(hex_color):
     return PatternFill("solid", fgColor=hex_color)
 
-def _font(bold=False, color="000000", size=11, name="Arial"):
+def _font(bold=False, color="000000", size=15, name="Arial"):
     return Font(bold=bold, color=color, size=size, name=name)
 
 def _center():
@@ -54,7 +54,7 @@ def _left():
 
 
 def _set_row(ws, row, values: list, bold=False, bg=None, fg="000000",
-             border=None, align="left", size=11):
+             border=None, align="left", size=15):
     for col_idx, val in enumerate(values, 1):
         cell = ws.cell(row=row, column=col_idx, value=val)
         cell.font = _font(bold=bold, color=fg, size=size)
@@ -65,7 +65,7 @@ def _set_row(ws, row, values: list, bold=False, bg=None, fg="000000",
         cell.alignment = _center() if align == "center" else _left()
 
 
-def _merge_title(ws, row, text, start_col, end_col, bg, fg, size=12, bold=True):
+def _merge_title(ws, row, text, start_col, end_col, bg, fg, size=14, bold=True):
     ws.merge_cells(
         start_row=row, start_column=start_col,
         end_row=row, end_column=end_col
@@ -80,7 +80,7 @@ def _merge_title(ws, row, text, start_col, end_col, bg, fg, size=12, bold=True):
 def _col_header_row(ws, row, headers: list, ncols: int):
     for col_idx, h in enumerate(headers, 1):
         cell = ws.cell(row=row, column=col_idx, value=h)
-        cell.font = _font(bold=True, size=10)
+        cell.font = _font(bold=True, size=14)
         cell.fill = _fill(C_COL_HDR_BG)
         cell.alignment = _center()
         cell.border = FULL_BORDER
@@ -89,19 +89,19 @@ def _col_header_row(ws, row, headers: list, ncols: int):
 def _goal_status_style(cell, status):
     if status == "Goal Met":
         cell.fill = _fill(C_GREEN)
-        cell.font = _font(color=C_GREEN_FG, size=10)
+        cell.font = _font(color=C_GREEN_FG, size=14)
     elif status == "Approaching Goal":
         cell.fill = _fill(C_AMBER)
-        cell.font = _font(color=C_AMBER_FG, size=10)
+        cell.font = _font(color=C_AMBER_FG, size=14)
     elif status == "Goal in Progress":
         cell.fill = _fill(C_RED_BG)
-        cell.font = _font(color=C_RED_FG, size=10)
+        cell.font = _font(color=C_RED_FG, size=14)
     else:
-        cell.font = _font(size=10)
+        cell.font = _font(size=14)
 
 
 
-def _pct_style(cell, actual_pct, target_pct, size=10):
+def _pct_style(cell, actual_pct, target_pct, size=14):
     """Color a percentage cell using the same green/amber/red logic as goal status."""
     if actual_pct is None or target_pct is None or target_pct == 0:
         cell.font = _font(size=size)
@@ -166,7 +166,7 @@ def build_report_sheet(
     overall: dict,
     logo_path: str = None,
 ):
-    NCOLS = 13
+    NCOLS = 12
     COL_CLUB   = 1
     COL_LEVEL  = 2
     COL_TTYPE  = 3
@@ -179,7 +179,6 @@ def build_report_sheet(
     COL_APCT   = 10
     COL_GOAL   = 11
     COL_STATUS = 12
-    COL_NOTES  = 13
 
     # Column widths
     ws.column_dimensions["A"].width = 15
@@ -194,7 +193,7 @@ def build_report_sheet(
     ws.column_dimensions["J"].width = 10
     ws.column_dimensions["K"].width = 10
     ws.column_dimensions["L"].width = 16
-    ws.column_dimensions["M"].width = 22
+    ws.column_dimensions["M"].width = 0
     ws.column_dimensions["N"].width = 0
 
     current_row = 1
@@ -206,7 +205,7 @@ def build_report_sheet(
 
     # ── Title spans all columns ───────────────────────────────────────────────
     _merge_title(ws, current_row, "Player Practice Report Card",
-                 1, NCOLS, C_HEADER_BG, C_HEADER_FG, size=16)
+                 1, NCOLS, C_HEADER_BG, C_HEADER_FG, size=18)
     current_row += 1
 
     # ── Logo: floating image anchored A1, sized as square filling rows 1-3 ───
@@ -216,7 +215,7 @@ def build_report_sheet(
     if logo_path and os.path.exists(logo_path):
         try:
             img = XLImage(logo_path)
-            logo_size = 155   # points → fits snugly in rows 1-3 height
+            logo_size = 160
             img.width = logo_size
             img.height = logo_size
             img.anchor = "C1"
@@ -231,27 +230,27 @@ def build_report_sheet(
 
     # E2 — "Player:" right-justified
     player_label = ws.cell(row=meta_row, column=5, value="Player:")
-    player_label.font = _font(bold=True, size=11)
+    player_label.font = _font(bold=True, size=15)
     player_label.fill = _fill("FFFFFF")
     player_label.alignment = Alignment(horizontal="right", vertical="center")
 
     # F2:H2 — player name, merged, left-justified
     ws.merge_cells(start_row=meta_row, start_column=6, end_row=meta_row, end_column=8)
     player_val = ws.cell(row=meta_row, column=6, value=session_info.get("player", ""))
-    player_val.font = _font(size=11)
+    player_val.font = _font(size=15)
     player_val.fill = _fill("FFFFFF")
     player_val.alignment = _left()
 
     # J2 — "Coach:" right-justified
     coach_label = ws.cell(row=meta_row, column=10, value="Coach:")
-    coach_label.font = _font(bold=True, size=11)
+    coach_label.font = _font(bold=True, size=15)
     coach_label.fill = _fill("FFFFFF")
     coach_label.alignment = Alignment(horizontal="right", vertical="center")
 
     # K2:L2 — coach name, merged, left-justified
     ws.merge_cells(start_row=meta_row, start_column=11, end_row=meta_row, end_column=12)
     coach_val = ws.cell(row=meta_row, column=11, value=session_info.get("coach", ""))
-    coach_val.font = _font(size=11)
+    coach_val.font = _font(size=15)
     coach_val.fill = _fill("FFFFFF")
     coach_val.alignment = _left()
 
@@ -265,27 +264,27 @@ def build_report_sheet(
 
     # E3 — "Date:" right-justified
     date_label_cell = ws.cell(row=week_row, column=5, value="Date:")
-    date_label_cell.font = _font(bold=True, size=11)
+    date_label_cell.font = _font(bold=True, size=15)
     date_label_cell.fill = _fill("FFFFFF")
     date_label_cell.alignment = Alignment(horizontal="right", vertical="center")
 
     # F3:H3 — date value, merged, left-justified
     ws.merge_cells(start_row=week_row, start_column=6, end_row=week_row, end_column=8)
     date_val = ws.cell(row=week_row, column=6, value=session_info.get("date", ""))
-    date_val.font = _font(size=11)
+    date_val.font = _font(size=15)
     date_val.fill = _fill("FFFFFF")
     date_val.alignment = _left()
 
     # J3 — "Week:" right-justified
     week_label_cell = ws.cell(row=week_row, column=10, value="Week:")
-    week_label_cell.font = _font(bold=True, size=11)
+    week_label_cell.font = _font(bold=True, size=15)
     week_label_cell.fill = _fill("FFFFFF")
     week_label_cell.alignment = Alignment(horizontal="right", vertical="center")
 
     # K3:L3 — week value, merged, left-justified
     ws.merge_cells(start_row=week_row, start_column=11, end_row=week_row, end_column=12)
     week_val = ws.cell(row=week_row, column=11, value=session_info.get("week", ""))
-    week_val.font = _font(size=11)
+    week_val.font = _font(size=15)
     week_val.fill = _fill("FFFFFF")
     week_val.alignment = _left()
 
@@ -300,7 +299,7 @@ def build_report_sheet(
         rows = section["rows"]
 
         # Section header
-        _merge_title(ws, current_row, sec_name, 1, NCOLS, C_SECTION_BG, C_SECTION_FG, size=13)
+        _merge_title(ws, current_row, sec_name, 1, NCOLS, C_SECTION_BG, C_SECTION_FG, size=15)
         ws.row_dimensions[current_row].height = 22
         current_row += 1
 
@@ -309,7 +308,7 @@ def build_report_sheet(
             "Club", "Level", "Target Type", "Distance (yd)",
             "Target (raw)", "Actual (raw)", "Target %",
             "Attempts", "Successes", "Actual %", "Goal %",
-            "Goal Status", "Notes"
+            "Goal Status"
         ]
         _col_header_row(ws, current_row, col_headers, NCOLS)
         ws.row_dimensions[current_row].height = 30
@@ -331,7 +330,6 @@ def build_report_sheet(
                 COL_DIST:   dist,
                 COL_ATT:    stats["attempts"] if stats["attempts"] else "",
                 COL_SUCC:   stats["successes"] if stats["successes"] is not None else "",
-                COL_NOTES:  "",
             }
 
             # Static computed values from Python
@@ -347,7 +345,7 @@ def build_report_sheet(
                 cell = ws.cell(row=current_row, column=col_idx, value=val)
                 cell.fill = _fill(bg)
                 cell.alignment = _center()
-                cell.font = _font(size=10)
+                cell.font = _font(size=14)
                 cell.border = FULL_BORDER
 
             # No special cell highlighting — all white
@@ -373,13 +371,13 @@ def build_report_sheet(
         current_row += 1  # gap between sections
 
     # ── Overall summary ───────────────────────────────────────────────────
-    _merge_title(ws, current_row, "Overall", 1, NCOLS, C_HEADER_BG, C_HEADER_FG, size=13)
+    _merge_title(ws, current_row, "Overall", 1, NCOLS, C_HEADER_BG, C_HEADER_FG, size=15)
     ws.row_dimensions[current_row].height = 22
     current_row += 1
 
     for col_idx, h in enumerate(["Attempts", "Successes", "Success %", "Goals", "Goals Met", "Goal %"], 1):
         cell = ws.cell(row=current_row, column=col_idx, value=h)
-        cell.font = _font(bold=True, size=10)
+        cell.font = _font(bold=True, size=14)
         cell.alignment = _center()
         cell.border = FULL_BORDER
     ws.row_dimensions[current_row].height = 22
@@ -396,23 +394,23 @@ def build_report_sheet(
     }
     for col_idx, val in ov_vals.items():
         cell = ws.cell(row=current_row, column=col_idx, value=val)
-        cell.font = _font(bold=True, size=11)
+        cell.font = _font(bold=True, size=15)
         cell.fill = _fill("FFFFFF")
         cell.alignment = _center()
         cell.border = FULL_BORDER
     # Color Success % (col 3) and Goal % (col 6)
     if ov["success_pct"] is not None:
-        _pct_style(ws.cell(row=current_row, column=3), ov["success_pct"], 1.0, size=11)
+        _pct_style(ws.cell(row=current_row, column=3), ov["success_pct"], 1.0, size=15)
     if ov["goal_pct"] is not None:
-        _pct_style(ws.cell(row=current_row, column=6), ov["goal_pct"], 1.0, size=11)
+        _pct_style(ws.cell(row=current_row, column=6), ov["goal_pct"], 1.0, size=15)
     current_row += 2
 
     # Notes
-    ws.cell(row=current_row, column=1, value="Additional Notes").font = _font(bold=True, size=11)
+    ws.cell(row=current_row, column=1, value="Additional Notes").font = _font(bold=True, size=15)
     current_row += 1
     ws.merge_cells(
         start_row=current_row, start_column=1,
-        end_row=current_row + 4, end_column=13
+        end_row=current_row + 4, end_column=12
     )
     notes_cell = ws.cell(row=current_row, column=1)
     notes_cell.fill = _fill("F5F5F5")
@@ -425,7 +423,7 @@ def build_raw_data_sheet(ws, df):
     headers = list(df.columns)
     for col_idx, h in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col_idx, value=h)
-        cell.font = _font(bold=True, color=C_HEADER_FG, size=10)
+        cell.font = _font(bold=True, color=C_HEADER_FG, size=14)
         cell.fill = _fill(C_HEADER_BG)
         cell.alignment = _center()
         ws.column_dimensions[get_column_letter(col_idx)].width = max(14, len(h) + 2)
@@ -441,7 +439,7 @@ def build_raw_data_sheet(ws, df):
             if val is not None and isinstance(val, float) and math.isnan(val):
                 val = None
             cell = ws.cell(row=row_idx, column=col_idx, value=val)
-            cell.font = _font(size=9)
+            cell.font = _font(size=13)
             if row_idx % 2 == 0:
                 cell.fill = _fill(C_ALT_ROW)
 
