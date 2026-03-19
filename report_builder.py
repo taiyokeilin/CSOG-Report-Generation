@@ -80,7 +80,7 @@ def _merge_title(ws, row, text, start_col, end_col, bg, fg, size=14, bold=True):
 def _col_header_row(ws, row, headers: list, ncols: int):
     for col_idx, h in enumerate(headers, 1):
         cell = ws.cell(row=row, column=col_idx, value=h)
-        cell.font = _font(bold=True, size=14)
+        cell.font = Font(bold=True, italic=True, size=12, name="Arial")
         cell.fill = _fill(C_COL_HDR_BG)
         cell.alignment = _center()
         cell.border = FULL_BORDER
@@ -394,7 +394,7 @@ def build_report_sheet(
     }
     for col_idx, val in ov_vals.items():
         cell = ws.cell(row=current_row, column=col_idx, value=val)
-        cell.font = _font(bold=True, size=15)
+        cell.font = _font(bold=False, size=15)
         cell.fill = _fill("FFFFFF")
         cell.alignment = _center()
         cell.border = FULL_BORDER
