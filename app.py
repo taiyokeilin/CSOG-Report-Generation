@@ -210,17 +210,50 @@ if df is not None:
 
     configs = st.session_state.club_configs
 
-    header_cols = st.columns([0.7, 1.8, 1.2, 2.2, 1.5, 1.6, 1.0])
+    level_info = """**Level Reference**
+
+| Level | Rate Mult | Prox Mult |
+|-------|-----------|-----------|
+| 1 | 0.10 | 3.00 |
+| 2 | 0.20 | 2.50 |
+| 3 | 0.30 | 2.25 |
+| 4 | 0.40 | 2.00 |
+| 5 | 0.50 | 1.75 |
+| 6 | 0.60 | 1.50 |
+| 7 | 0.70 | 1.25 |
+| 8 | 0.80 | 1.00 |
+| 9–10 | 0.90–1.00 | 1.00 |
+| 11 | 1.25 | 0.75 |
+| 12 | 1.50 | 0.50 |
+
+**Tour Targets**
+
+| Dist (yd) | Proximity (ft) | Range (yd) |
+|-----------|----------------|------------|
+| 20–30 | 6.4–7.2 | 2.0 |
+| 40–70 | 10.4–13.2 | 3.0–4.0 |
+| 80–90 | 14.2 | 4.0 |
+| 100–110 | 16.5 | 5.0 |
+| 120–140 | 19.0 | 5.0 |
+| 150–170 | 23.0 | 6.0 |
+| 180–200 | 28.6 | 6.0–7.0 |
+| 210–220 | 34.4 | 7.0 |
+| 230–250 | 43.2–48.0 | 8.0 |
+"""
+    header_cols = st.columns([0.7, 1.8, 0.8, 1.2, 2.2, 1.5, 1.6])
     header_cols[0].markdown("**Include**")
     header_cols[1].markdown("**Club**")
-    header_cols[2].markdown("**Skill**")
-    header_cols[3].markdown("**Target Types**")
-    header_cols[4].markdown("**Distance (yd)**")
-    header_cols[5].markdown("**Level (1–12)**")
-    header_cols[6].markdown("**Shots**")
+    header_cols[2].markdown("**Shots**")
+    header_cols[3].markdown("**Skill**")
+    header_cols[4].markdown("**Target Types**")
+    header_cols[5].markdown("**Distance (yd)**")
+    with header_cols[6]:
+        st.markdown("**Level (1–12)**")
+        with st.popover("ℹ️", use_container_width=False):
+            st.markdown(level_info)
 
     for idx, cfg in enumerate(configs):
-        row_cols = st.columns([0.7, 1.8, 1.2, 2.2, 1.5, 1.6, 1.0])
+        row_cols = st.columns([0.7, 1.8, 0.8, 1.2, 2.2, 1.5, 1.6])
 
         cfg["include"] = row_cols[0].checkbox(
             "", value=cfg["include"], key=f"inc_{idx}", label_visibility="collapsed"
@@ -229,8 +262,16 @@ if df is not None:
             f"<div style='padding-top:8px'><b>{cfg['club']}</b></div>", unsafe_allow_html=True
         )
 
+        try:
+            shot_count = len(df.filter(pl.col("club") == cfg["club"]))
+        except Exception:
+            shot_count = len(df[df["club"] == cfg["club"]])
+        row_cols[2].markdown(
+            f"<div style='padding-top:8px'>{shot_count}</div>", unsafe_allow_html=True
+        )
+
         prev_section = cfg["skill"]
-        cfg["skill"] = row_cols[2].selectbox(
+        cfg["skill"] = row_cols[3].selectbox(
             "", SKILLS, index=SKILLS.index(cfg["skill"]),
             key=f"sec_{idx}", label_visibility="collapsed"
         )
@@ -242,27 +283,19 @@ if df is not None:
         if not valid_selected:
             valid_selected = [available_types[0]]
 
-        cfg["selected_target_types"] = row_cols[3].multiselect(
+        cfg["selected_target_types"] = row_cols[4].multiselect(
             "", available_types, default=valid_selected,
             key=f"tt_{idx}", label_visibility="collapsed"
         )
 
-        dist_val = row_cols[4].number_input(
+        dist_val = row_cols[5].number_input(
             "", min_value=0, max_value=400, value=cfg["distance_yd"] or 0,
             step=5, key=f"dist_{idx}", label_visibility="collapsed"
         )
         cfg["distance_yd"] = dist_val if dist_val > 0 else None
 
-        cfg["level"] = row_cols[5].slider(
+        cfg["level"] = row_cols[6].slider(
             "", 1, 12, value=cfg["level"], key=f"lvl_{idx}", label_visibility="collapsed"
-        )
-
-        try:
-            shot_count = len(df.filter(pl.col("club") == cfg["club"]))
-        except Exception:
-            shot_count = len(df[df["club"] == cfg["club"]])
-        row_cols[6].markdown(
-            f"<div style='padding-top:8px'>{shot_count}</div>", unsafe_allow_html=True
         )
 
     st.session_state.club_configs = configs
@@ -363,4 +396,3 @@ if df is not None:
                 )
 else:
     st.info("Load a file above to get started.")
-# redeploy
