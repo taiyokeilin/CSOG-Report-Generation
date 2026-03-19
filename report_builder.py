@@ -199,26 +199,30 @@ def build_report_sheet(
 
     current_row = 1
 
-    # ── Logo area: merge A1:C3 ────────────────────────────────────────────────
-    ws.merge_cells(start_row=1, start_column=1, end_row=3, end_column=3)
-    ws.row_dimensions[1].height = 40
+    # ── Row heights ──────────────────────────────────────────────────────────
+    ws.row_dimensions[1].height = 45
     ws.row_dimensions[2].height = 25
     ws.row_dimensions[3].height = 25
-    ws.cell(row=1, column=1).alignment = _center()
+
+    # ── Title spans all columns ───────────────────────────────────────────────
+    _merge_title(ws, current_row, "Player Practice Report Card",
+                 1, NCOLS, C_HEADER_BG, C_HEADER_FG, size=16)
+    current_row += 1
+
+    # ── Logo: floating image anchored A1, sized as square filling rows 1-3 ───
+    # Row 1=45pt, Row 2=25pt, Row 3=25pt → total ~95pt ≈ 127px (at 96dpi)
+    # Col A=15 units, B=9.5 units, C=18 units → ~42.5 units * 7px ≈ 298px wide
+    # Use square = min of height/width available to keep it square
     if logo_path and os.path.exists(logo_path):
         try:
             img = XLImage(logo_path)
-            img.width = 80
-            img.height = 80
+            logo_size = 95   # points → fits snugly in rows 1-3 height
+            img.width = logo_size
+            img.height = logo_size
             img.anchor = "A1"
             ws.add_image(img)
         except Exception:
             pass
-
-    # ── Title ────────────────────────────────────────────────────────────────
-    _merge_title(ws, current_row, "Player Practice Report Card",
-                 4, NCOLS, C_HEADER_BG, C_HEADER_FG, size=16)
-    current_row += 1
 
     # ── Row 2: Date | Player: | Player Name | Coach: | Coach Name ────────────
     meta_row = current_row
