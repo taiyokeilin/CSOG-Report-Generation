@@ -298,9 +298,22 @@ def build_report_sheet(
         sec_name = section["section_name"]
         rows = section["rows"]
 
-        # Section header
-        _merge_title(ws, current_row, sec_name, 1, NCOLS, C_SECTION_BG, C_SECTION_FG, size=15)
+        # Spacer + title merged into one block
+        spacer_row = current_row
+        ws.row_dimensions[spacer_row].height = 15
+        current_row += 1
         ws.row_dimensions[current_row].height = 22
+        # Set value and style on spacer row (top-left of merge)
+        cell = ws.cell(row=spacer_row, column=1, value=sec_name)
+        cell.font = _font(bold=True, color=C_SECTION_FG, size=15)
+        cell.fill = _fill(C_SECTION_BG)
+        cell.alignment = _center()
+        # Fill remaining cells in both rows before merging
+        for r in [spacer_row, current_row]:
+            for c in range(1, NCOLS + 1):
+                ws.cell(row=r, column=c).fill = _fill(C_SECTION_BG)
+        ws.merge_cells(start_row=spacer_row, start_column=1,
+                       end_row=current_row, end_column=NCOLS)
         current_row += 1
 
         # Column headers
@@ -368,11 +381,22 @@ def build_report_sheet(
             all_stat_rows.append(current_row)
             current_row += 1
 
-        current_row += 1  # gap between sections
+
 
     # ── Overall summary ───────────────────────────────────────────────────
-    _merge_title(ws, current_row, "Overall", 1, NCOLS, C_HEADER_BG, C_HEADER_FG, size=15)
+    overall_spacer = current_row
+    ws.row_dimensions[overall_spacer].height = 15
+    current_row += 1
     ws.row_dimensions[current_row].height = 22
+    cell = ws.cell(row=overall_spacer, column=1, value="Overall")
+    cell.font = _font(bold=True, color=C_HEADER_FG, size=15)
+    cell.fill = _fill(C_HEADER_BG)
+    cell.alignment = _center()
+    for r in [overall_spacer, current_row]:
+        for c in range(1, NCOLS + 1):
+            ws.cell(row=r, column=c).fill = _fill(C_HEADER_BG)
+    ws.merge_cells(start_row=overall_spacer, start_column=1,
+                   end_row=current_row, end_column=NCOLS)
     current_row += 1
 
     for col_idx, h in enumerate(["Attempts", "Successes", "Success %", "Goals", "Goals Met", "Goal %"], 1):
@@ -404,10 +428,18 @@ def build_report_sheet(
         _pct_style(ws.cell(row=current_row, column=3), ov["success_pct"], 1.0, size=15)
     if ov["goal_pct"] is not None:
         _pct_style(ws.cell(row=current_row, column=6), ov["goal_pct"], 1.0, size=15)
-    current_row += 2
+    current_row += 1
 
     # Notes
-    ws.cell(row=current_row, column=1, value="Additional Notes").font = _font(bold=True, size=15)
+    notes_spacer = current_row
+    ws.row_dimensions[notes_spacer].height = 15
+    current_row += 1
+    ws.row_dimensions[current_row].height = 22
+    cell = ws.cell(row=notes_spacer, column=1, value="Additional Notes")
+    cell.font = _font(bold=True, size=15)
+    cell.alignment = _center()
+    ws.merge_cells(start_row=notes_spacer, start_column=1,
+                   end_row=current_row, end_column=NCOLS)
     current_row += 1
     ws.merge_cells(
         start_row=current_row, start_column=1,
