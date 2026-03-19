@@ -331,8 +331,14 @@ if df is not None:
                 if service:
                     subfolders = list_output_subfolders(service)
                     if subfolders:
-                        folder_name, folder_id = subfolders[0]
-                        st.caption(f"Destination: {folder_name}")
+                        folder_names = [f[0] for f in subfolders]
+                        folder_ids   = [f[1] for f in subfolders]
+                        selected_idx = st.selectbox(
+                            "Upload to Drive folder",
+                            range(len(folder_names)),
+                            format_func=lambda i: folder_names[i],
+                            key="output_folder_select",
+                        )
                         if st.button("☁️ Upload to Drive", use_container_width=True):
                             with st.spinner("Uploading…"):
                                 try:
@@ -340,7 +346,7 @@ if df is not None:
                                         service,
                                         st.session_state.excel_bytes,
                                         st.session_state.report_filename,
-                                        folder_id,
+                                        folder_ids[selected_idx],
                                     )
                                     st.success(f"✅ Uploaded! [Open in Drive]({link})")
                                 except Exception as e:
