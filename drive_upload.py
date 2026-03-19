@@ -71,13 +71,27 @@ def download_drive_file(service, file_id: str) -> bytes:
 
 
 def list_output_subfolders(service) -> list[tuple[str, str]]:
-    """Return the configured output folder itself as the only upload destination."""
+    """List subfolders inside the configured output parent folder, plus the parent itself. Returns [(name, id)]."""
     parent_id = st.secrets["drive_output_parent_id"]
     try:
-        result = service.files().get(
-            fileId=parent_id, fields="id, name"
+        # Get parent folder name
+        parent = service.files().get(
+            fileId=parent_id, fields="id, name",
+            supportsAllDrives=True,
         ).execute()
-        return [(result["name"], result["id"])]
+        # List subfolders
+        q = f"'{parent_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
+        results = service.files().list(
+            q=q,
+            fields="files(id, name)",
+            orderBy="name",
+            pageSize=100,
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+        ).execute()
+        subfolders = [(f["name"], f["id"]) for f in results.get("files", [])]
+        # Parent folder is always first option
+        return [(parent["name"] + " (root)", parent["id"])] + subfolders
     except Exception as e:
         st.error(f"Could not access output folder: {e}")
         return []
@@ -99,5 +113,6 @@ def upload_to_drive(service, file_bytes: bytes, filename: str, folder_id: str) -
         body=file_metadata,
         media_body=media,
         fields="id, webViewLink",
+        supportsAllDrives=True,
     ).execute()
     return uploaded.get("webViewLink", "")
