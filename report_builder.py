@@ -1,7 +1,9 @@
 import io
 import math
+import os
 from datetime import date
 from openpyxl import Workbook
+from openpyxl.drawing.image import Image as XLImage
 from openpyxl.styles import (
     Font, PatternFill, Alignment, Border, Side, numbers
 )
@@ -159,9 +161,10 @@ def _formula_target_rate(dist_cell: str, level: int) -> str:
 def build_report_sheet(
     ws,
     session_info: dict,
-    sections: list[dict],   # [{section_name, rows: [{club, level, target_type, distance_yd, stats}]}]
+    sections: list[dict],
     raw_data_sheet_name: str,
     overall: dict,
+    logo_path: str = None,
 ):
     NCOLS = 13
     COL_CLUB   = 1
@@ -196,10 +199,25 @@ def build_report_sheet(
 
     current_row = 1
 
+    # ── Logo area: merge A1:C3 ────────────────────────────────────────────────
+    ws.merge_cells(start_row=1, start_column=1, end_row=3, end_column=3)
+    ws.row_dimensions[1].height = 40
+    ws.row_dimensions[2].height = 25
+    ws.row_dimensions[3].height = 25
+    ws.cell(row=1, column=1).alignment = _center()
+    if logo_path and os.path.exists(logo_path):
+        try:
+            img = XLImage(logo_path)
+            img.width = 80
+            img.height = 80
+            img.anchor = "A1"
+            ws.add_image(img)
+        except Exception:
+            pass
+
     # ── Title ────────────────────────────────────────────────────────────────
     _merge_title(ws, current_row, "Player Practice Report Card",
-                 1, NCOLS, C_HEADER_BG, C_HEADER_FG, size=16)
-    ws.row_dimensions[current_row].height = 30
+                 4, NCOLS, C_HEADER_BG, C_HEADER_FG, size=16)
     current_row += 1
 
     # ── Row 2: Date | Player: | Player Name | Coach: | Coach Name ────────────
@@ -428,6 +446,7 @@ def build_excel_report(
     df,
     session_info: dict,
     club_configs: list[dict],
+    logo_path: str = None,
 ) -> bytes:
     wb = Workbook()
     wb.remove(wb.active)  # remove default sheet
@@ -467,7 +486,7 @@ def build_excel_report(
     # ── Report sheet ────────────────────────────────────────────────────
     ws_report = wb.create_sheet("Report")
     ws_report.sheet_view.showGridLines = False
-    build_report_sheet(ws_report, session_info, sections, "Raw Data", overall)
+    build_report_sheet(ws_report, session_info, sections, "Raw Data", overall, logo_path=logo_path)
 
     # Move Report to front
     wb.move_sheet("Report", offset=-wb.index(wb["Report"]))
