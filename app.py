@@ -303,7 +303,7 @@ if df is not None:
                         "week": week_label,
                     }
                     try:
-                        logo_path = "logo.png" if os.path.exists("logo.png") else None
+                        logo_path = "csog_logo.png" if os.path.exists("csog_logo.png") else None
                         excel_bytes = build_excel_report(df, session_info, active_configs, logo_path=logo_path)
                         st.session_state.excel_bytes = excel_bytes
                         st.session_state.report_filename = (
