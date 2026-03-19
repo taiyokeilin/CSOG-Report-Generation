@@ -215,7 +215,7 @@ def build_report_sheet(
     if logo_path and os.path.exists(logo_path):
         try:
             img = XLImage(logo_path)
-            logo_size = 160
+            logo_size = 160   # points → fits snugly in rows 1-3 height
             img.width = logo_size
             img.height = logo_size
             img.anchor = "C1"
