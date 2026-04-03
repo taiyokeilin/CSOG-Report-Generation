@@ -1,52 +1,79 @@
 """
-Google Drive integration via service account.
+Google Drive integration via shared drive.
 Secrets required in Streamlit secrets:
-  [google_service_account]   — service account JSON fields
-  drive_input_folder_id      — folder ID to browse for input CSVs
-  drive_output_parent_id     — parent folder ID whose subfolders are upload destinations
+  [drive]              — shared drive JSON fields
+  shared_drive_id      — shared drive ID whose subfolders are the input and output folders 
+  input_folder_id      — folder ID to browse for input CSVs
+  output_parent_id     — parent folder ID whose subfolders are upload destinations
 """
 import io
 import streamlit as st
+from googleapiclient.discovery import build
+from google.oauth2.credentials import Credentials
 
 
 def get_drive_service():
+    """Builds the Drive service using the OAuth token from st.login()."""
     try:
-        from google.oauth2 import service_account
-        from googleapiclient.discovery import build
-        creds_dict = dict(st.secrets["google_service_account"])
-        creds = service_account.Credentials.from_service_account_info(
-            creds_dict,
-            scopes=["https://www.googleapis.com/auth/drive"],
-        )
+        # Streamlit 1.42+ stores the token here after a successful st.login()
+        token = st.user.tokens.get("access")
+        
+        if not token:
+            # If no token, we can't build the service
+            return None
+            
+        creds = Credentials(token)
         return build("drive", "v3", credentials=creds)
-    except Exception:
+    except Exception as e:
+        st.error(f"Failed to initialize Drive service: {e}")
         return None
 
 
+# def drive_secrets_configured() -> bool:
+#     """Checks if the necessary IDs and Auth settings are in secrets."""
+#     try:
+#         # Check for both the Auth section and your Drive ID section
+#         return (
+#             "auth" in st.secrets and
+#             "drive" in st.secrets and
+#             "shared_drive_id" in st.secrets["drive"] and
+#             "input_folder_id" in st.secrets["drive"]
+#         )
+#     except Exception:
+#         return False
+    
+    
 def drive_secrets_configured() -> bool:
-    try:
-        return (
-            "google_service_account" in st.secrets
-            and "drive_input_folder_id" in st.secrets
-            and "drive_output_parent_id" in st.secrets
-        )
-    except Exception:
-        return False
+    """Checks for the NEW OAuth [auth] section and Drive IDs."""
+    return (
+        "auth" in st.secrets and 
+        "drive" in st.secrets and
+        "shared_drive_id" in st.secrets["drive"]
+    )
 
 
 def list_input_files(service) -> list[dict]:
     """List CSV and XLSX files in the configured input folder."""
-    folder_id = st.secrets["drive_input_folder_id"]
+    if not service: return []
+    
+    shared_drive_id = st.secrets["drive"]["shared_drive_id"]
+    input_folder_id = st.secrets["drive"]["input_folder_id"]
+    
     try:
         q = (
-            f"'{folder_id}' in parents and trashed=false and ("
+            f"'{input_folder_id}' in parents and trashed=false and ("
             "mimeType='text/csv' or "
             "mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or "
-            "mimeType='text/plain'"
+            "mimeType='text/plain' or "
+            "name contains '.csv'"  # Added for extra safety
             ")"
         )
         results = service.files().list(
             q=q,
+            corpora="drive",
+            driveId=shared_drive_id,
+            includeItemsFromAllDrives=True,
+            supportsAllDrives=True,
             fields="files(id, name, mimeType, modifiedTime)",
             orderBy="modifiedTime desc",
             pageSize=100,
@@ -72,22 +99,26 @@ def download_drive_file(service, file_id: str) -> bytes:
 
 def list_output_subfolders(service) -> list[tuple[str, str]]:
     """List subfolders inside the configured output parent folder, plus the parent itself. Returns [(name, id)]."""
-    parent_id = st.secrets["drive_output_parent_id"]
+    shared_drive_id = st.secrets["drive"]["shared_drive_id"]
+    parent_id = st.secrets["drive"]["output_folder_id"]
     try:
         # Get parent folder name
         parent = service.files().get(
             fileId=parent_id, fields="id, name",
             supportsAllDrives=True,
+            includeItemsFromAllDrives=True
         ).execute()
         # List subfolders
         q = f"'{parent_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
         results = service.files().list(
             q=q,
+            corpora="drive",
+            driveId=shared_drive_id,
+            includeItemsFromAllDrives=True,
+            supportsAllDrives=True,
             fields="files(id, name)",
             orderBy="name",
             pageSize=100,
-            supportsAllDrives=True,
-            includeItemsFromAllDrives=True,
         ).execute()
         subfolders = [(f["name"], f["id"]) for f in results.get("files", [])]
         # Parent folder is always first option
