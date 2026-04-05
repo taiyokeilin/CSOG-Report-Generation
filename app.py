@@ -22,10 +22,17 @@ if not st.user.is_logged_in:
     st.header("Welcome to the Drive Portal")
     st.info("Please log in to access the Shared Drive folders.")
     
-    # st.login() handles the redirect automatically using st.secrets["auth"]
-    st.button("Log in with Google", on_click=st.login)
-    
-    st.stop()  # Important: Stops the rest of the app from running
+    # Use 'kwargs' to pass the scope into st.login
+    st.button(
+        "Log in with Google", 
+        on_click=st.login, 
+        kwargs={
+            "client_kwargs": {
+                "scope": "openid email profile https://googleapis.com"
+            }
+        }
+    )
+    st.stop()
 
 # This now uses the token from the login above
 service = get_drive_service()
