@@ -74,9 +74,9 @@ def _parse_and_show(file_bytes, filename):
         st.success(f"✅ Loaded **{filename}** — {n_shots} shots across {n_clubs} clubs")
         with st.expander("Preview raw data", expanded=False):
             try:
-                st.dataframe(result.head(30).to_pandas(), use_container_width=True)
+                st.dataframe(result.head(50).to_pandas(), use_container_width=True)
             except Exception:
-                st.dataframe(result.head(30), use_container_width=True)
+                st.dataframe(result.head(50), use_container_width=True)
         return result
     except Exception as e:
         st.error(f"❌ Failed to parse file: {e}")
