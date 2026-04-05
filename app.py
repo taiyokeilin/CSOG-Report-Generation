@@ -26,11 +26,7 @@ if not st.user.is_logged_in:
     st.button(
         "Log in with Google", 
         on_click=st.login, 
-        kwargs={
-            "client_kwargs": {
-                "scope": "openid email profile https://googleapis.com"
-            }
-        }
+        
     )
     st.stop()
 
