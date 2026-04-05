@@ -28,13 +28,13 @@ if not st.user.is_logged_in:
     st.stop()  # Important: Stops the rest of the app from running
 
 # This now uses the token from the login above
-service = drive_upload.get_drive_service()
+service = get_drive_service()
 
 if service:
     st.success(f"Connected as {st.user.name}")
     
     # 4. RUN YOUR LOGIC
-    files = drive_upload.list_input_files(service)
+    files = list_input_files(service)
     if files:
         st.write(f"Found {len(files)} files in the input folder.")
         # ... rest of your UI
