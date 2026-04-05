@@ -60,13 +60,15 @@ def compute_club_stats(
     Compute all stats for a single club row.
     Works with polars or pandas DataFrames.
     """
-    try:
-        import polars as pl
-        club_df = df.filter(pl.col("club") == club_name)
-        rows = club_df.to_dicts()
-    except (ImportError, AttributeError):
-        club_df = df[df["club"] == club_name]
-        rows = club_df.to_dict("records")
+    import pandas as _pd
+    if isinstance(df, _pd.DataFrame):
+        rows = df[df["club"] == club_name].to_dict("records")
+    else:
+        try:
+            import polars as pl
+            rows = df.filter(pl.col("club") == club_name).to_dicts()
+        except Exception:
+            rows = df[df["club"] == club_name].to_dict("records")
     attempts = len(rows)
 
     if attempts == 0 or distance_yd is None:

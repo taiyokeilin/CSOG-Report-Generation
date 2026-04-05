@@ -64,7 +64,10 @@ def _parse_and_show(file_bytes, filename):
             result = parse_file(file_bytes, monitor_type.lower())
         try:
             n_shots = len(result)
-            n_clubs = result["club"].n_unique()
+            try:
+                n_clubs = result["club"].n_unique()
+            except AttributeError:
+                n_clubs = result["club"].nunique()
         except Exception:
             n_shots = len(result)
             n_clubs = result["club"].nunique()
@@ -284,7 +287,11 @@ if df is not None:
         )
 
         try:
-            shot_count = len(df.filter(pl.col("club") == cfg["club"]))
+            import pandas as _pd
+            if isinstance(df, _pd.DataFrame):
+                shot_count = len(df[df["club"] == cfg["club"]])
+            else:
+                shot_count = len(df.filter(pl.col("club") == cfg["club"]))
         except Exception:
             shot_count = len(df[df["club"] == cfg["club"]])
         row_cols[2].markdown(

@@ -436,10 +436,14 @@ def build_raw_data_sheet(ws, df):
         cell.alignment = _center()
         ws.column_dimensions[get_column_letter(col_idx)].width = max(14, len(h) + 2)
 
-    try:
-        rows_iter = df.to_dicts()  # polars
-    except AttributeError:
-        rows_iter = df.to_dict("records")  # pandas
+    import pandas as _pd
+    if isinstance(df, _pd.DataFrame):
+        rows_iter = df.to_dict("records")
+    else:
+        try:
+            rows_iter = df.to_dicts()
+        except AttributeError:
+            rows_iter = df.to_dict("records")
 
     for row_idx, row in enumerate(rows_iter, 2):
         for col_idx, h in enumerate(headers, 1):
