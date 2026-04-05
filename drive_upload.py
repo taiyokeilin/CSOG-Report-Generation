@@ -26,6 +26,8 @@ def get_drive_service():
             token_uri="https://oauth2.googleapis.com/token",
             scopes=["https://www.googleapis.com/auth/drive"],
         )
+        st.write("DEBUG token scopes:", getattr(creds, "scopes", "none"))
+        st.write("DEBUG token valid:", creds.valid)
         return build("drive", "v3", credentials=creds)
     except Exception as e:
         st.error(f"Drive auth error: {e}")
