@@ -26,8 +26,6 @@ def get_drive_service():
             token_uri="https://oauth2.googleapis.com/token",
             scopes=["https://www.googleapis.com/auth/drive"],
         )
-        st.write("DEBUG token scopes:", getattr(creds, "scopes", "none"))
-        st.write("DEBUG token valid:", creds.valid)
         return build("drive", "v3", credentials=creds)
     except Exception as e:
         st.error(f"Drive auth error: {e}")
@@ -51,26 +49,15 @@ def list_input_files(service) -> list[dict]:
     """List CSV and XLSX files in the configured input folder."""
     if not service:
         return []
-    shared_drive_id = st.secrets["drive"]["shared_drive_id"]
     input_folder_id = st.secrets["drive"]["input_folder_id"]
     try:
-        q = (
-            f"'{input_folder_id}' in parents and trashed=false and ("
-            "mimeType='text/csv' or "
-            "mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or "
-            "mimeType='text/plain' or "
-            "name contains '.csv'"
-            ")"
-        )
+        # Simplified call — no corpora/driveId to test basic API access first
         results = service.files().list(
-            q=q,
-            corpora="drive",
-            driveId=shared_drive_id,
+            q=f"'{input_folder_id}' in parents and trashed=false",
             includeItemsFromAllDrives=True,
             supportsAllDrives=True,
             fields="files(id, name, mimeType, modifiedTime)",
-            orderBy="modifiedTime desc",
-            pageSize=100,
+            pageSize=20,
         ).execute()
         return results.get("files", [])
     except Exception as e:
