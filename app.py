@@ -82,39 +82,29 @@ def _parse_and_show(file_bytes, filename):
 
 if drive_available:
     with tab_drive:
-        # Require Google login to access Drive
-        if not st.user.is_logged_in:
-            st.info("Sign in with Google to browse your Shared Drive files.")
-            st.button("Log in with Google", on_click=st.login, key="google_login")
-        else:
-            service = get_drive_service()
-            if service:
-                st.caption(f"Signed in as {st.user.name} · [Log out](javascript:void(0))")
-                if st.button("Log out", key="logout_btn"):
-                    st.logout()
-                files = list_input_files(service)
-                if files:
-                    file_names = [f["name"] for f in files]
-                    selected_name = st.selectbox(
-                        "Select a file from Drive",
-                        file_names,
-                        key="drive_file_select",
-                    )
-                    selected_file = next(f for f in files if f["name"] == selected_name)
-                    if st.button("Load from Drive", key="load_drive"):
-                        with st.spinner("Downloading from Drive…"):
-                            file_bytes = download_drive_file(service, selected_file["id"])
-                        st.session_state.file_bytes = file_bytes
-                        st.session_state.file_name = selected_name
-                        st.session_state.df = _parse_and_show(file_bytes, selected_name)
-                    elif "df" in st.session_state and st.session_state.get("file_name") == selected_name:
-                        df = st.session_state.df
-                else:
-                    st.info("No CSV or XLSX files found in the configured Drive folder.")
+        service = get_drive_service()
+        if service:
+            files = list_input_files(service)
+            if files:
+                file_names = [f["name"] for f in files]
+                selected_name = st.selectbox(
+                    "Select a file from Drive",
+                    file_names,
+                    key="drive_file_select",
+                )
+                selected_file = next(f for f in files if f["name"] == selected_name)
+                if st.button("Load from Drive", key="load_drive"):
+                    with st.spinner("Downloading from Drive…"):
+                        file_bytes = download_drive_file(service, selected_file["id"])
+                    st.session_state.file_bytes = file_bytes
+                    st.session_state.file_name = selected_name
+                    st.session_state.df = _parse_and_show(file_bytes, selected_name)
+                elif "df" in st.session_state and st.session_state.get("file_name") == selected_name:
+                    df = st.session_state.df
             else:
-                st.error("Could not connect to Google Drive. Try logging out and back in.")
-                if st.button("Log out", key="logout_err"):
-                    st.logout()
+                st.info("No CSV or XLSX files found in the configured Drive folder.")
+        else:
+            st.error("Could not connect to Google Drive. Check secrets configuration.")
 
 with tab_local:
     uploaded_file = st.file_uploader(
@@ -392,7 +382,7 @@ if df is not None:
             )
 
         with drive_col:
-            if drive_secrets_configured() and st.user.is_logged_in:
+            if drive_secrets_configured():
                 service = get_drive_service()
                 if service:
                     subfolders = list_output_subfolders(service)
@@ -421,8 +411,6 @@ if df is not None:
                         st.info("Could not access the configured output folder.")
                 else:
                     st.error("Could not connect to Google Drive.")
-            elif drive_secrets_configured() and not st.user.is_logged_in:
-                st.info("Sign in with Google to enable Drive upload.")
             else:
                 st.info("☁️ Google Drive not configured. See README for setup instructions.")
 else:
