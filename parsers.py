@@ -91,7 +91,7 @@ def _extract_target_from_name(club_name: str) -> int | None:
 
 
 def _parse_direction_value(val: str, pos_dir: str = "R") -> float | None:
-    """Parse strings like '5.2R', '3.1L', '5.2 In-Out', '3.1 Out-In'."""
+    """Parse strings like '5.2R', '3.1L', '5.2 In-Out', '3.1 Out-In', '0L', '1.8R'."""
     if val is None:
         return None
     val = str(val).strip()
@@ -99,7 +99,8 @@ def _parse_direction_value(val: str, pos_dir: str = "R") -> float | None:
         return float(val)
     except ValueError:
         pass
-    m = re.match(r"^([0-9]+\.?[0-9]*)\s*(.+)$", val)
+    # Match optional spaces, number, optional space, direction
+    m = re.match(r"^\s*([0-9]+\.?[0-9]*)\s*([A-Za-z][A-Za-z\s-]*)$", val)
     if not m:
         return None
     num, direction = float(m.group(1)), m.group(2).strip().upper()
@@ -186,51 +187,60 @@ def parse_trackman(file_bytes: bytes) -> pl.DataFrame:
 
 def parse_foresight(file_bytes: bytes) -> pl.DataFrame:
     content = _decode(file_bytes)
-    df = pl.read_csv(
+    # Read with pandas first to handle leading spaces in column names
+    import pandas as _pd
+    _df_raw = _pd.read_csv(
         io.StringIO(content),
-        skip_rows=1,
-        infer_schema_length=1000,
-        null_values=["", "N/A"],
-    ).filter(
-        pl.col("Club").is_not_null() &
-        ~pl.col("Club").is_in(["Average", "Std. Dev."])
+        skiprows=1,
+        header=0,
+        na_values=["", "N/A"],
     )
-
-    rows = df.to_dicts()
+    # Strip leading/trailing spaces from column names
+    _df_raw.columns = [c.strip() for c in _df_raw.columns]
+    # Filter out units row, blank rows, averages
+    _df_raw = _df_raw[
+        _df_raw["Club"].notna() &
+        ~_df_raw["Club"].isin(["Average", "Std. Dev.", "", " "]) &
+        _pd.to_numeric(_df_raw["Ball Speed"], errors="coerce").notna()
+    ].copy()
+    rows = _df_raw.to_dict("records")
     records = []
     club_counters: dict[str, int] = {}
     for i, row in enumerate(rows):
-        club = row.get("Club")
+        club = str(row.get("Club", "") or "").strip()
+        if not club:
+            continue
         club_counters[club] = club_counters.get(club, 0) + 1
         total = _safe_float(row.get("Total"))
-        offline_raw = row.get("Offline")
-        offline = _parse_direction_value(str(offline_raw)) if offline_raw else None
+        offline_raw = str(row.get("Offline", "") or "").strip()
+        offline = _parse_direction_value(offline_raw) if offline_raw else None
         carry = _safe_float(row.get("Carry"))
         peak_yd = _safe_float(row.get("Peak Height"))
-        face_h_raw = row.get("Face Impact Lateral")
-        face_v_raw = row.get("Face Impact Vertical")
-        face_h = _parse_direction_value(str(face_h_raw), "Toe") if face_h_raw else None
-        face_v = _parse_direction_value(str(face_v_raw), "High") if face_v_raw else None
-        aoa_raw = row.get("Angle of Attack")
-        cp_raw = row.get("Club Path")
-        ftp_raw = row.get("Face to Path")
-        lie_raw = row.get("Lie")
-        side_raw = row.get("Side Angle")
-        sidespin_raw = row.get("Sidespin")
-        tilt_raw = row.get("Tilt Angle")
-        target = _extract_target_from_name(club or "")
-        club_path = _parse_direction_value(str(cp_raw), "In-Out") if cp_raw else None
-        ftp = _parse_direction_value(str(ftp_raw), "Open") if ftp_raw else None
+        face_h_raw = str(row.get("Face Impact Lateral", "") or "").strip()
+        face_v_raw = str(row.get("Face Impact Vertical", "") or "").strip()
+        face_h = _parse_direction_value(face_h_raw, "Toe") if face_h_raw else None
+        face_v = _parse_direction_value(face_v_raw, "High") if face_v_raw else None
+        aoa_raw = str(row.get("Angle of Attack", "") or "").strip()
+        cp_raw = str(row.get("Club Path", "") or "").strip()
+        ftp_raw = str(row.get("Face to Path", "") or "").strip()
+        lie_raw = str(row.get("Lie", "") or "").strip()
+        side_raw = str(row.get("Side Angle", "") or "").strip()
+        sidespin_raw = str(row.get("Sidespin", "") or "").strip()
+        tilt_raw = str(row.get("Tilt Angle", "") or "").strip()
+        target = _extract_target_from_name(club)
+        club_path = _parse_direction_value(cp_raw, "In-Out") if cp_raw else None
+        ftp = _parse_direction_value(ftp_raw, "Open") if ftp_raw else None
+        face_angle = (ftp - club_path) if (ftp is not None and club_path is not None) else None
         records.append({
             "club": club,
             "shot_num_session": i + 1,
             "shot_num_club": club_counters[club],
             "ball_speed_mph": _safe_float(row.get("Ball Speed")),
             "launch_angle_deg": _safe_float(row.get("Launch Angle")),
-            "side_angle_deg": _parse_direction_value(str(side_raw)) if side_raw else None,
+            "side_angle_deg": _parse_direction_value(side_raw) if side_raw else None,
             "backspin_rpm": _safe_float(row.get("Backspin")),
-            "side_spin_rpm": _parse_direction_value(str(sidespin_raw)) if sidespin_raw else None,
-            "tilt_angle_deg": _parse_direction_value(str(tilt_raw)) if tilt_raw else None,
+            "side_spin_rpm": _parse_direction_value(sidespin_raw) if sidespin_raw else None,
+            "tilt_angle_deg": _parse_direction_value(tilt_raw) if tilt_raw else None,
             "total_spin_rpm": _safe_float(row.get("Total Spin")),
             "carry_yd": carry,
             "total_yd": total,
@@ -240,11 +250,11 @@ def parse_foresight(file_bytes: bytes) -> pl.DataFrame:
             "to_pin_ft": _to_pin_ft(total, offline, target),
             "club_speed_mph": _safe_float(row.get("Club Speed")),
             "smash_factor": _safe_float(row.get("Efficiency")),
-            "angle_of_attack_deg": _parse_direction_value(str(aoa_raw), "Up") if aoa_raw else None,
+            "angle_of_attack_deg": _parse_direction_value(aoa_raw, "Up") if aoa_raw else None,
             "club_path_deg": club_path,
-            "face_angle_deg": (ftp - club_path) if (ftp is not None and club_path is not None) else None,
+            "face_angle_deg": face_angle,
             "face_to_path_deg": ftp,
-            "dynamic_lie_deg": _parse_direction_value(str(lie_raw), "Toe Up") if lie_raw else None,
+            "dynamic_lie_deg": _parse_direction_value(lie_raw, "Toe Up") if lie_raw else None,
             "dynamic_loft_deg": _safe_float(row.get("Loft")),
             "closure_rate_dps": _safe_float(row.get("Closure Rate")),
             "face_impact_horizontal_mm": face_h,
@@ -255,7 +265,12 @@ def parse_foresight(file_bytes: bytes) -> pl.DataFrame:
             ),
             "date": None,
         })
-    return pl.DataFrame(records)
+    import pandas as _pd2
+    return _pd2.DataFrame(records)
+    # --- old polars path below replaced ---
+    df = None  # placeholder so indentation below is skipped
+
+
 
 
 def parse_flightscope(file_bytes: bytes) -> pl.DataFrame:
