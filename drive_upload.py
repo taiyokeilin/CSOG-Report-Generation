@@ -74,6 +74,7 @@ def list_input_files(service) -> list[dict]:
             driveId=shared_drive_id,
             includeItemsFromAllDrives=True,
             supportsAllDrives=True,
+          role='fileOrganizer",
             fields="files(id, name, mimeType, modifiedTime)",
             orderBy="modifiedTime desc",
             pageSize=100,
