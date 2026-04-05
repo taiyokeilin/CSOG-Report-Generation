@@ -19,15 +19,8 @@ st.set_page_config(
 )
 
 if not st.user.is_logged_in:
-    st.header("Welcome to the Drive Portal")
-    st.info("Please log in to access the Shared Drive folders.")
-    
-    # Use 'kwargs' to pass the scope into st.login
-    st.button(
-        "Log in with Google", 
-        on_click=st.login, 
-        
-    )
+    # Do NOT pass kwargs or client_kwargs here
+    st.button("Log in with Google", on_click=st.login)
     st.stop()
 
 # This now uses the token from the login above
