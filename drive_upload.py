@@ -19,8 +19,16 @@ def get_drive_service():
         token = st.user.tokens.get("access")
         if not token:
             return None
-        return build("drive", "v3", credentials=Credentials(token))
-    except Exception:
+        creds = Credentials(
+            token=token,
+            client_id=st.secrets["auth"]["client_id"],
+            client_secret=st.secrets["auth"]["client_secret"],
+            token_uri="https://oauth2.googleapis.com/token",
+            scopes=["https://www.googleapis.com/auth/drive"],
+        )
+        return build("drive", "v3", credentials=creds)
+    except Exception as e:
+        st.error(f"Drive auth error: {e}")
         return None
 
 
