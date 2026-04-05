@@ -24,7 +24,7 @@ def get_drive_service():
             client_id=st.secrets["auth"]["client_id"],
             client_secret=st.secrets["auth"]["client_secret"],
             token_uri="https://oauth2.googleapis.com/token",
-            scopes=["https://www.googleapis.com/auth/drive"],
+            scopes=["https://www.googleapis.com/auth/drive.file"],
         )
         return build("drive", "v3", credentials=creds)
     except Exception as e:
