@@ -18,29 +18,6 @@ st.set_page_config(
     layout="wide",
 )
 
-if not st.user.is_logged_in:
-    # Do NOT pass kwargs or client_kwargs here
-    st.button("Log in with Google", on_click=st.login)
-    st.stop()
-
-# This now uses the token from the login above
-service = get_drive_service()
-
-if service:
-    st.success(f"Connected as {st.user.name}")
-    
-    # 4. RUN YOUR LOGIC
-    files = list_input_files(service)
-    if files:
-        st.write(f"Found {len(files)} files in the input folder.")
-        # ... rest of your UI
-    else:
-        st.warning("No CSV files found. Check your Folder ID and Permissions.")
-else:
-    st.error("Failed to connect to Google Drive. Try logging out and back in.")
-    if st.button("Log out"):
-        st.logout()
-
 st.markdown("""
 <style>
     .main-header {font-size: 2rem; font-weight: 700; color: #1F4E79; margin-bottom: 0;}
@@ -51,6 +28,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# ── Header ────────────────────────────────────────────────────────────────────
 title_col, logo_col = st.columns([5, 1])
 with title_col:
     st.markdown('<p class="main-header">⛳ Golf Practice Report Generator</p>', unsafe_allow_html=True)
@@ -81,7 +59,6 @@ df = None
 
 
 def _parse_and_show(file_bytes, filename):
-    """Parse bytes and return df, showing success/error."""
     try:
         with st.spinner("Parsing file…"):
             result = parse_file(file_bytes, monitor_type.lower())
@@ -103,47 +80,18 @@ def _parse_and_show(file_bytes, filename):
         return None
 
 
-# if drive_available:
-#     with tab_drive:
-#         service = get_drive_service()
-#         if service:
-#             files = list_input_files(service)
-#             if files:
-#                 file_names = [f["name"] for f in files]
-#                 selected_name = st.selectbox(
-#                     "Select a file from Drive",
-#                     file_names,
-#                     key="drive_file_select",
-#                 )
-#                 selected_file = next(f for f in files if f["name"] == selected_name)
-
-#                 if st.button("Load from Drive", key="load_drive"):
-#                     with st.spinner("Downloading from Drive…"):
-#                         file_bytes = download_drive_file(service, selected_file["id"])
-#                     st.session_state.file_bytes = file_bytes
-#                     st.session_state.file_name = selected_name
-#                     st.session_state.df = _parse_and_show(file_bytes, selected_name)
-#                 elif "df" in st.session_state and st.session_state.get("file_name") == selected_name:
-#                     df = st.session_state.df
-#             else:
-#                 st.info("No CSV or XLSX files found in the configured Drive folder.")
-#         else:
-#             st.error("Could not connect to Google Drive. Check your secrets configuration.")
-            
 if drive_available:
     with tab_drive:
-        if not drive_secrets_configured():
-                st.error("Drive secrets are not fully configured in st.secrets.")
-        else:   
-            # 1. force login
-            if not st.user.is_logged_in:
-                    st.info("Please sign in to access the Shared Drive.")
-                    st.button("Log in with Google", on_click=st.login, key="google_login")
-                    st.stop()
-            # 2. if logged in, show drive interface
+        # Require Google login to access Drive
+        if not st.user.is_logged_in:
+            st.info("Sign in with Google to browse your Shared Drive files.")
+            st.button("Log in with Google", on_click=st.login, key="google_login")
+        else:
             service = get_drive_service()
             if service:
-                st.success(f"Connected as {st.user.name}")
+                st.caption(f"Signed in as {st.user.name} · [Log out](javascript:void(0))")
+                if st.button("Log out", key="logout_btn"):
+                    st.logout()
                 files = list_input_files(service)
                 if files:
                     file_names = [f["name"] for f in files]
@@ -153,7 +101,6 @@ if drive_available:
                         key="drive_file_select",
                     )
                     selected_file = next(f for f in files if f["name"] == selected_name)
-
                     if st.button("Load from Drive", key="load_drive"):
                         with st.spinner("Downloading from Drive…"):
                             file_bytes = download_drive_file(service, selected_file["id"])
@@ -163,52 +110,11 @@ if drive_available:
                     elif "df" in st.session_state and st.session_state.get("file_name") == selected_name:
                         df = st.session_state.df
                 else:
-                    st.info("No CSV or XLSX files found. Verify the Folder ID and Shared Drive membership.")
+                    st.info("No CSV or XLSX files found in the configured Drive folder.")
             else:
-                # If we get here, st.user.is_logged_in was True but the token failed
-                st.error("Authentication failed. Try logging out and back in.")
-            
-            
-            
-            
-            
-        # # 1. CHECK IF LOGGED IN
-        # if not st.user.is_logged_in:
-        #     st.info("Log in to access Shared Drive files.")
-        #     st.button("Log in with Google", on_click=st.login, key="drive_login_btn")
-        #     st.stop() # Prevents the rest of the tab from trying to run without a token
-
-        # # 2. PROCEED WITH SERVICE
-        # service = get_drive_service()
-        # if service:
-        #     files = list_input_files(service)
-        #     if files:
-        #         file_names = [f["name"] for f in files]
-        #         selected_name = st.selectbox(
-        #             "Select a file from Drive",
-        #             file_names,
-        #             key="drive_file_select",
-        #         )
-        #         selected_file = next(f for f in files if f["name"] == selected_name)
-
-        #         if st.button("Load from Drive", key="load_drive"):
-        #             with st.spinner("Downloading from Drive…"):
-        #                 file_bytes = download_drive_file(service, selected_file["id"])
-        #             st.session_state.file_bytes = file_bytes
-        #             st.session_state.file_name = selected_name
-        #             st.session_state.df = _parse_and_show(file_bytes, selected_name)
-        #         elif "df" in st.session_state and st.session_state.get("file_name") == selected_name:
-        #             df = st.session_state.df
-        #     else:
-        #         st.info("No CSV or XLSX files found. Verify the Folder ID and Shared Drive membership.")
-        # else:
-        #     # If we get here, st.user.is_logged_in was True but the token failed
-        #     st.error("Authentication expired or invalid.")
-        #     st.button("Re-authenticate", on_click=st.login, key="reauth_btn")            
-            
-
-            
-            
+                st.error("Could not connect to Google Drive. Try logging out and back in.")
+                if st.button("Log out", key="logout_err"):
+                    st.logout()
 
 with tab_local:
     uploaded_file = st.file_uploader(
@@ -223,7 +129,6 @@ with tab_local:
         st.session_state.file_name = uploaded_file.name
         st.session_state.df = _parse_and_show(file_bytes, uploaded_file.name)
 
-# Pull df from session state (set by either tab)
 if "df" in st.session_state and st.session_state.df is not None:
     df = st.session_state.df
 
@@ -364,6 +269,7 @@ if df is not None:
 | 240 | 43.2 | 8.0 |
 | 250 | 48.0 | 8.0 |
 """
+
     header_cols = st.columns([0.7, 1.8, 0.8, 1.2, 2.2, 1.5, 1.6])
     header_cols[0].markdown("**Include**")
     header_cols[1].markdown("**Club**")
@@ -486,7 +392,7 @@ if df is not None:
             )
 
         with drive_col:
-            if drive_secrets_configured():
+            if drive_secrets_configured() and st.user.is_logged_in:
                 service = get_drive_service()
                 if service:
                     subfolders = list_output_subfolders(service)
@@ -515,9 +421,9 @@ if df is not None:
                         st.info("Could not access the configured output folder.")
                 else:
                     st.error("Could not connect to Google Drive.")
+            elif drive_secrets_configured() and not st.user.is_logged_in:
+                st.info("Sign in with Google to enable Drive upload.")
             else:
-                st.info(
-                    "☁️ Google Drive not configured. See README for setup instructions."
-                )
+                st.info("☁️ Google Drive not configured. See README for setup instructions.")
 else:
     st.info("Load a file above to get started.")
