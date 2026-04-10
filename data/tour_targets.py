@@ -48,10 +48,12 @@ LEVELS_MULTIPLIERS = {
 }
 
 def get_tour_target(distance_yd: int) -> tuple:
-    """Return (proximity_ft, range_yd, target_rate) for nearest 10-yd increment."""
-    rounded = round(distance_yd / 10) * 10
-    rounded = max(20, min(300, rounded))
-    return TOUR_TARGETS.get(rounded, (None, None, None))
+    """Return (proximity_ft, range_yd, target_rate) for the 10-yd band containing distance_yd.
+    e.g. 63 -> 60 band (60-69), 75 -> 70 band (70-79).
+    """
+    banded = (int(distance_yd) // 10) * 10
+    banded = max(20, min(300, banded))
+    return TOUR_TARGETS.get(banded, (None, None, None))
 
 def get_level_multipliers(level: int) -> tuple:
     """Return (rate_multiplier, proximity_multiplier) for a player level."""

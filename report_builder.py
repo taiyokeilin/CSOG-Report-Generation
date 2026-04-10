@@ -47,7 +47,7 @@ def _font(bold=False, color="000000", size=15, name="Helvetica"):
     return Font(bold=bold, color=color, size=size, name=name)
 
 def _center():
-    return Alignment(horizontal="center", vertical="center", wrap_text=True)
+    return Alignment(horizontal="center", vertical="center", wrap_text=False)
 
 def _left():
     return Alignment(horizontal="left", vertical="center", wrap_text=True)
@@ -367,6 +367,7 @@ def build_report_sheet(
             _goal_status_style(status_cell, stats.get("goal_status"))
             status_cell.alignment = _center()
 
+            ws.row_dimensions[current_row].height = 20
             all_stat_rows.append(current_row)
             current_row += 1
 
