@@ -134,8 +134,8 @@ def compute_club_stats(
         target_pct = min(1.0, 0.65 * rate_mult_d) if rate_mult_d else None
         successes = sum(1 for l in laterals if l <= target_disp) if (laterals and target_disp is not None) else None
         avg_lateral = sum(laterals) / len(laterals) if laterals else None
-        target_raw = f"+/- {target_disp:.1f} yds" if target_disp is not None else None
-        actual_raw = f"{avg_lateral:.1f} yds" if avg_lateral is not None else None
+        target_raw = f"< {round(target_disp)} yds" if target_disp is not None else None
+        actual_raw = f"{round(avg_lateral)} yds" if avg_lateral is not None else None
 
     else:
         target_range = get_target_range_yd(distance_yd, level)

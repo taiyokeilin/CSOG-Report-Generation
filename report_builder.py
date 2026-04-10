@@ -43,7 +43,7 @@ def _border(left=None, right=None, top=None, bottom=None):
 def _fill(hex_color):
     return PatternFill("solid", fgColor=hex_color)
 
-def _font(bold=False, color="000000", size=15, name="Arial"):
+def _font(bold=False, color="000000", size=15, name="Helvetica"):
     return Font(bold=bold, color=color, size=size, name=name)
 
 def _center():
@@ -80,7 +80,7 @@ def _merge_title(ws, row, text, start_col, end_col, bg, fg, size=14, bold=True, 
 def _col_header_row(ws, row, headers: list, ncols: int):
     for col_idx, h in enumerate(headers, 1):
         cell = ws.cell(row=row, column=col_idx, value=h)
-        cell.font = Font(bold=True, italic=True, size=13, name="Arial")
+        cell.font = Font(bold=True, italic=True, size=13, name="Helvetica")
         cell.fill = _fill(C_COL_HDR_BG)
         cell.alignment = _center()
         cell.border = FULL_BORDER
@@ -381,7 +381,7 @@ def build_report_sheet(
 
     for col_idx, h in enumerate(["Attempts", "Successes", "Success %", "Goals", "Goals Met", "Goal %"], 1):
         cell = ws.cell(row=current_row, column=col_idx, value=h)
-        cell.font = Font(bold=True, italic=True, size=13, name="Arial")
+        cell.font = Font(bold=True, italic=True, size=13, name="Helvetica")
         cell.fill = _fill("F2F2F2")
         cell.alignment = _center()
         cell.border = FULL_BORDER
