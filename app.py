@@ -74,9 +74,9 @@ def _parse_and_show(file_bytes, filename):
         st.success(f"✅ Loaded **{filename}** — {n_shots} shots across {n_clubs} clubs")
         with st.expander("Preview raw data", expanded=False):
             try:
-                st.dataframe(result.head(50).to_pandas(), use_container_width=True)
+                st.dataframe(result.head(30).to_pandas(), use_container_width=True)
             except Exception:
-                st.dataframe(result.head(50), use_container_width=True)
+                st.dataframe(result.head(30), use_container_width=True)
         return result
     except Exception as e:
         st.error(f"❌ Failed to parse file: {e}")
@@ -235,32 +235,24 @@ if df is not None:
 
 **Tour Targets**
 
-| Dist (yd) | Proximity (ft) | Range (yd) |
-|-----------|----------------|------------|
-| 20 | 6.4 | 2.0 |
-| 30 | 7.2 | 2.0 |
-| 40 | 10.4 | 3.0 |
-| 50 | 13.2 | 3.0 |
-| 60 | 13.2 | 4.0 |
-| 70 | 13.2 | 4.0 |
-| 80 | 14.2 | 4.0 |
-| 90 | 14.2 | 4.0 |
-| 100 | 16.5 | 5.0 |
-| 110 | 16.5 | 5.0 |
-| 120 | 16.5 | 5.0 |
-| 130 | 19.0 | 5.0 |
-| 140 | 19.0 | 5.0 |
-| 150 | 23.0 | 6.0 |
-| 160 | 23.0 | 6.0 |
-| 170 | 23.0 | 6.0 |
-| 180 | 28.6 | 6.0 |
-| 190 | 28.6 | 6.0 |
-| 200 | 28.6 | 7.0 |
-| 210 | 34.4 | 7.0 |
-| 220 | 34.4 | 7.0 |
-| 230 | 43.2 | 8.0 |
-| 240 | 43.2 | 8.0 |
-| 250 | 48.0 | 8.0 |
+| Dist Band (yd) | Proximity (ft) | Range (yd) |
+|----------------|----------------|------------|
+| 20–29 | 6.4 | 2.0 |
+| 30–39 | 7.2 | 2.0 |
+| 40–49 | 10.4 | 3.0 |
+| 50–59 | 13.2 | 3.0 |
+| 60–79 | 13.2 | 4.0 |
+| 80–89 | 14.2 | 4.0 |
+| 90–99 | 14.2 | 4.0 |
+| 100–119 | 16.5 | 5.0 |
+| 120–129 | 16.5 | 5.0 |
+| 130–149 | 19.0 | 5.0 |
+| 150–179 | 23.0 | 6.0 |
+| 180–199 | 28.6 | 6.0 |
+| 200–209 | 28.6 | 7.0 |
+| 210–229 | 34.4 | 7.0 |
+| 230–249 | 43.2 | 8.0 |
+| 250–259 | 48.0 | 8.0 |
 """
 
     header_cols = st.columns([0.7, 1.8, 0.8, 1.2, 2.2, 1.5, 1.6])
