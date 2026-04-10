@@ -35,7 +35,7 @@ with title_col:
     st.markdown('<p class="sub-header">Upload a launch monitor CSV → configure clubs → download your report</p>', unsafe_allow_html=True)
 with logo_col:
     if os.path.exists("csog_logo.png"):
-        st.image("csog_logo.png", width=150)
+        st.image("csog_logo.png", width=200)
 
 
 # ── SECTION 1: Load Data File ─────────────────────────────────────────────
