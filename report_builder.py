@@ -483,6 +483,7 @@ def build_excel_report(
             target_type=cfg["target_type"],
             distance_yd=cfg["distance_yd"],
             level=cfg["level"],
+            section=cfg.get("section", ""),
         )
         sections_dict[sec].append({**cfg, "stats": stats})
 

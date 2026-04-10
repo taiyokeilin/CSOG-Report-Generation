@@ -52,9 +52,10 @@ def get_target_rate(distance_yd: int, level: int) -> float | None:
 def compute_club_stats(
     df,
     club_name: str,
-    target_type: str,       # "Proximity" or "Distance Control"
+    target_type: str,
     distance_yd: int | None,
     level: int,
+    section: str = "",
 ) -> dict:
     """
     Compute all stats for a single club row.
@@ -82,6 +83,7 @@ def compute_club_stats(
             "actual_raw": None,
         }
 
+    # Default target_pct (overridden by Distance/Dispersion branches)
     target_pct = get_target_rate(distance_yd, level)
 
     if target_type == "Proximity":
@@ -97,19 +99,50 @@ def compute_club_stats(
         target_raw = feet_to_feet_inches_str(target_prox) if target_prox else None
         actual_raw = feet_to_feet_inches_str(avg_prox) if avg_prox else None
 
-    else:  # Distance Control / Distance / Dispersion
+    elif target_type == "Distance Control":
         target_range = get_target_range_yd(distance_yd, level)
         totals = [r["total_yd"] for r in rows if r.get("total_yd") is not None]
         if target_range is not None and distance_yd is not None:
-            successes = sum(
-                1 for t in totals
-                if abs(t - distance_yd) <= target_range
-            )
+            successes = sum(1 for t in totals if abs(t - distance_yd) <= target_range)
         else:
             successes = None
-
         avg_total = sum(totals) / len(totals) if totals else None
         target_raw = f"+/- {target_range:.0f} yds" if target_range is not None else None
+        actual_raw = f"{round(avg_total)} yds" if avg_total is not None else None
+
+    elif target_type == "Distance":
+        # Driving: target = inputted distance, actual = avg carry, success = carry >= distance
+        rate_mult, _ = get_level_multipliers(level)
+        target_pct = min(1.0, 0.65 * rate_mult) if rate_mult else None
+        carries = [r["carry_yd"] for r in rows if r.get("carry_yd") is not None]
+        successes = sum(1 for c in carries if c >= distance_yd) if carries else None
+        avg_carry = sum(carries) / len(carries) if carries else None
+        target_raw = f"{distance_yd} yds"
+        actual_raw = f"{round(avg_carry)} yds" if avg_carry is not None else None
+
+    elif target_type == "Dispersion":
+        # Driving: target = 30/2 * prox_mult, actual = avg abs(offline), success = offline <= target
+        _, prox_mult = get_level_multipliers(level)
+        target_disp = (30 / 2) * prox_mult if prox_mult else None
+        # Use carry offline if available, else total offline
+        laterals = []
+        for r in rows:
+            val = r.get("offline_yd")
+            if val is not None:
+                laterals.append(abs(val))
+        rate_mult_d, _ = get_level_multipliers(level)
+        target_pct = min(1.0, 0.65 * rate_mult_d) if rate_mult_d else None
+        successes = sum(1 for l in laterals if l <= target_disp) if (laterals and target_disp is not None) else None
+        avg_lateral = sum(laterals) / len(laterals) if laterals else None
+        target_raw = f"+/- {target_disp:.1f} yds" if target_disp is not None else None
+        actual_raw = f"{avg_lateral:.1f} yds" if avg_lateral is not None else None
+
+    else:
+        target_range = get_target_range_yd(distance_yd, level)
+        totals = [r["total_yd"] for r in rows if r.get("total_yd") is not None]
+        successes = None
+        avg_total = sum(totals) / len(totals) if totals else None
+        target_raw = None
         actual_raw = f"{round(avg_total)} yds" if avg_total is not None else None
 
     actual_pct = successes / attempts if successes is not None and attempts > 0 else None
