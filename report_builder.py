@@ -215,7 +215,7 @@ def build_report_sheet(
     if logo_path and os.path.exists(logo_path):
         try:
             img = XLImage(logo_path)
-            logo_size = 160   # points → fits snugly in rows 1-3 height
+            logo_size = 170   # points → fits snugly in rows 1-3 height
             img.width = logo_size
             img.height = logo_size
             img.anchor = "C1"
@@ -400,15 +400,15 @@ def build_report_sheet(
     }
     for col_idx, val in ov_vals.items():
         cell = ws.cell(row=current_row, column=col_idx, value=val)
-        cell.font = _font(bold=False, size=15)
+        cell.font = _font(bold=False, size=14)
         cell.fill = _fill("FFFFFF")
         cell.alignment = _center()
         cell.border = FULL_BORDER
     # Color Success % (col 3) and Goal % (col 6)
     if ov["success_pct"] is not None:
-        _pct_style(ws.cell(row=current_row, column=3), ov["success_pct"], 1.0, size=15)
+        _pct_style(ws.cell(row=current_row, column=3), ov["success_pct"], 1.0, size=14)
     if ov["goal_pct"] is not None:
-        _pct_style(ws.cell(row=current_row, column=6), ov["goal_pct"], 1.0, size=15)
+        _pct_style(ws.cell(row=current_row, column=6), ov["goal_pct"], 1.0, size=14)
     current_row += 1
 
     # Notes
