@@ -8,8 +8,8 @@ from parsers import parse_file
 from report_builder import build_excel_report
 from drive_upload import (
     drive_secrets_configured, get_drive_service,
-    list_input_subfolders, download_drive_file,
-    list_output_subfolders, upload_to_drive,
+    list_input_files, list_input_subfolders, list_files_in_folder,
+    download_drive_file, list_output_subfolders, upload_to_drive,
 )
 
 st.set_page_config(
@@ -87,25 +87,38 @@ if drive_available:
     with tab_drive:
         service = get_drive_service()
         if service:
-            files = list_input_subfolders(service)
-            if files:
-                file_names = [f["name"] for f in files]
-                selected_name = st.selectbox(
-                    "Select a file from Drive",
-                    file_names,
-                    key="drive_file_select",
+            subfolders = list_input_subfolders(service)
+            if subfolders:
+                folder_names = [f[0] for f in subfolders]
+                folder_ids   = [f[1] for f in subfolders]
+                selected_folder_idx = st.selectbox(
+                    "Select folder",
+                    range(len(folder_names)),
+                    format_func=lambda i: folder_names[i],
+                    key="drive_input_folder_select",
                 )
-                selected_file = next(f for f in files if f["name"] == selected_name)
-                if st.button("Load from Drive", key="load_drive"):
-                    with st.spinner("Downloading from Drive…"):
-                        file_bytes = download_drive_file(service, selected_file["id"])
-                    st.session_state.file_bytes = file_bytes
-                    st.session_state.file_name = selected_name
-                    st.session_state.df = _parse_and_show(file_bytes, selected_name)
-                elif "df" in st.session_state and st.session_state.get("file_name") == selected_name:
-                    df = st.session_state.df
+                selected_folder_id = folder_ids[selected_folder_idx]
+                files = list_files_in_folder(service, selected_folder_id)
+                if files:
+                    file_names = [f["name"] for f in files]
+                    selected_name = st.selectbox(
+                        "Select a file",
+                        file_names,
+                        key="drive_file_select",
+                    )
+                    selected_file = next(f for f in files if f["name"] == selected_name)
+                    if st.button("Load from Drive", key="load_drive"):
+                        with st.spinner("Downloading from Drive…"):
+                            file_bytes = download_drive_file(service, selected_file["id"])
+                        st.session_state.file_bytes = file_bytes
+                        st.session_state.file_name = selected_name
+                        st.session_state.df = _parse_and_show(file_bytes, selected_name)
+                    elif "df" in st.session_state and st.session_state.get("file_name") == selected_name:
+                        df = st.session_state.df
+                else:
+                    st.info("No CSV or XLSX files found in the selected folder.")
             else:
-                st.info("No CSV or XLSX files found in the configured Drive folder.")
+                st.error("Could not access the configured input folder.")
         else:
             st.error("Could not connect to Google Drive. Check secrets configuration.")
 

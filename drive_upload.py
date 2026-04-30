@@ -38,6 +38,65 @@ def drive_secrets_configured() -> bool:
         return False
 
 
+
+def list_input_subfolders(service) -> list[tuple[str, str]]:
+    """Return input parent folder + its subfolders as browsing options."""
+    if not service:
+        return []
+    shared_drive_id = st.secrets["drive"]["shared_drive_id"]
+    parent_id = st.secrets["drive"]["input_folder_id"]
+    try:
+        parent = service.files().get(
+            fileId=parent_id, fields="id, name",
+            supportsAllDrives=True,
+        ).execute()
+        q = f"'{parent_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
+        results = service.files().list(
+            q=q,
+            corpora="drive",
+            driveId=shared_drive_id,
+            includeItemsFromAllDrives=True,
+            supportsAllDrives=True,
+            fields="files(id, name)",
+            orderBy="name",
+            pageSize=100,
+        ).execute()
+        subfolders = [(f["name"], f["id"]) for f in results.get("files", [])]
+        return [(parent["name"] + " (root)", parent["id"])] + subfolders
+    except Exception as e:
+        st.error(f"Could not access input folder: {e}")
+        return []
+
+
+def list_files_in_folder(service, folder_id: str) -> list[dict]:
+    """List CSV and XLSX files in a specific folder."""
+    if not service:
+        return []
+    shared_drive_id = st.secrets["drive"]["shared_drive_id"]
+    try:
+        q = (
+            f"'{folder_id}' in parents and trashed=false and ("
+            "mimeType='text/csv' or "
+            "mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or "
+            "mimeType='text/plain' or "
+            "name contains '.csv'"
+            ")"
+        )
+        results = service.files().list(
+            q=q,
+            corpora="drive",
+            driveId=shared_drive_id,
+            includeItemsFromAllDrives=True,
+            supportsAllDrives=True,
+            fields="files(id, name, mimeType, modifiedTime)",
+            orderBy="modifiedTime desc",
+            pageSize=100,
+        ).execute()
+        return results.get("files", [])
+    except Exception as e:
+        st.error(f"Could not list files: {e}")
+        return []
+
 def list_input_files(service) -> list[dict]:
     if not service:
         return []
@@ -66,39 +125,6 @@ def list_input_files(service) -> list[dict]:
     except Exception as e:
         st.error(f"Could not list Drive files: {e}")
         return []
-    
-    
-    
-def list_input_subfolders(service) -> list[tuple[str, str]]:
-    if not service:
-        return []
-    shared_drive_id = st.secrets["drive"]["shared_drive_id"]
-    parent_id = st.secrets["drive"]["input_folder_id"]
-    try:
-        parent = service.files().get(
-            fileId=parent_id, fields="id, name",
-            supportsAllDrives=True,
-        ).execute()
-        q = f"'{parent_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
-        results = service.files().list(
-            q=q,
-            corpora="drive",
-            driveId=shared_drive_id,
-            includeItemsFromAllDrives=True,
-            supportsAllDrives=True,
-            fields="files(id, name)",
-            orderBy="name",
-            pageSize=100,
-        ).execute()
-        subfolders = [(f["name"], f["id"]) for f in results.get("files", [])]
-        return [(parent["name"] + " (root)", parent["id"])] + subfolders
-    except Exception as e:
-        st.error(f"Could not access input folder: {e}")
-        return []    
-    
-    
-    
-    
 
 
 def download_drive_file(service, file_id: str) -> bytes:
