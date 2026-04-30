@@ -8,7 +8,7 @@ from parsers import parse_file
 from report_builder import build_excel_report
 from drive_upload import (
     drive_secrets_configured, get_drive_service,
-    list_input_files, download_drive_file,
+    list_input_subfolders, download_drive_file,
     list_output_subfolders, upload_to_drive,
 )
 
@@ -87,7 +87,7 @@ if drive_available:
     with tab_drive:
         service = get_drive_service()
         if service:
-            files = list_input_files(service)
+            files = list_input_subfolders(service)
             if files:
                 file_names = [f["name"] for f in files]
                 selected_name = st.selectbox(
