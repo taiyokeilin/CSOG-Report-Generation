@@ -457,6 +457,80 @@ def build_raw_data_sheet(ws, df):
                 cell.fill = _fill(C_ALT_ROW)
 
 
+
+def build_glossary_sheet(ws):
+    ws.title = "Glossary"
+    ws.sheet_view.showGridLines = False
+
+    HEADERS = ["Section", "Item", "Definition", "Example"]
+    COL_WIDTHS = [35, 20, 90, 45]
+    ROWS = [
+        ("Target Type (Wedge Play and Approach)", "Proximity",
+         "Tracking ability to hit the shot within the desired proximity to the target. Proximity takes into account both distance and direction.",
+         "1 yard long and 1 yard right = 4\'3\""),
+        ("Target Type (Wedge Play and Approach)", "Distance Control",
+         "Tracking ability to hit the shot within the desired front-to-back range. Distance Control is similar to Proximity, but only cares how far the ball carried, as opposed to also taking into account direction.",
+         "1 yard long and 1 yard right = 1 yd"),
+        ("Target Type (Driving)", "Distance",
+         "Tracking ability to hit the shot at least as far as desired distance. How far past or short of the target is not tracked in this metric.",
+         "1 yard long = 1"),
+        ("Target Type (Driving)", "Dispersion",
+         "Tracking ability to hit the shot within the desired side-to-side range. The target is half the distance of the total range.",
+         "< 15 yards means drives must be between 15 yards left and 15 yards right"),
+        ("Distance (yd)", "Distance (yd)",
+         "The desired carry distance for a given club.", ""),
+        ("Target (raw)", "Proximity",
+         "The desired radius of a club\'s carry distribution.", "35\'6\""),
+        ("Target (raw)", "Distance Control",
+         "The desired front-to-back range of a club\'s carry number distribution.", "+/- 5 yds"),
+        ("Actual (raw)", "Proximity",
+         "The observed average proximity to the target.", "50\'10\""),
+        ("Actual (raw)", "Distance Control",
+         "The observed average carry distance.", "165 yds"),
+        ("Target %", "Target %",
+         "The desired success rate to be on level. Intended successes divided by attempts.", "75%"),
+        ("Attempts", "Attempts",
+         "The number of shots hit with a club.", "10"),
+        ("Successes", "Successes",
+         "The number of shots that meet the target.", "7"),
+        ("Actual %", "Actual %",
+         "The observed success rate. Successes divided by attempts.", "70%"),
+        ("Goal %", "Goal %",
+         "Actual % divided by Target %. Over 100% means the actual success rate was at least as high as the target success rate.",
+         "(7 / 10) / 0.75 = 93%"),
+        ("Goal Status", "Goal Status",
+         "If Goal % is greater than 100%, then \'Goal Met\'. If Goal % is between 70% and 100%, then \'Approaching Goal\'. If Goal % is below 50%, then \'Goal in Progress\'.",
+         "Approaching Goal"),
+    ]
+
+    # Column widths
+    for col_idx, width in enumerate(COL_WIDTHS, 1):
+        ws.column_dimensions[get_column_letter(col_idx)].width = width
+
+    # Header row
+    for col_idx, h in enumerate(HEADERS, 1):
+        cell = ws.cell(row=1, column=col_idx, value=h)
+        cell.font = Font(bold=True, italic=True, size=13, name="Helvetica")
+        cell.fill = PatternFill("solid", fgColor="F2F2F2")
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.border = Border(bottom=Side(style="thin"), top=Side(style="thin"),
+                             left=Side(style="thin"), right=Side(style="thin"))
+    ws.row_dimensions[1].height = 22
+
+    # Data rows
+    for row_idx, (section, item, definition, example) in enumerate(ROWS, 2):
+        vals = [section, item, definition, example]
+        bg = "FFFFFF" if row_idx % 2 == 0 else "F9F9F9"
+        for col_idx, val in enumerate(vals, 1):
+            cell = ws.cell(row=row_idx, column=col_idx, value=val)
+            cell.font = Font(size=12, name="Helvetica")
+            cell.fill = PatternFill("solid", fgColor=bg)
+            cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+            cell.border = Border(bottom=Side(style="thin", color="DDDDDD"),
+                                 left=Side(style="thin", color="DDDDDD"),
+                                 right=Side(style="thin", color="DDDDDD"))
+        ws.row_dimensions[row_idx].height = 40
+
 def build_excel_report(
     df,
     session_info: dict,
@@ -503,6 +577,10 @@ def build_excel_report(
     ws_report = wb.create_sheet("Report")
     ws_report.sheet_view.showGridLines = False
     build_report_sheet(ws_report, session_info, sections, "Raw Data", overall, logo_path=logo_path)
+
+    # ── Glossary sheet ──────────────────────────────────────────────
+    ws_glossary = wb.create_sheet("Glossary")
+    build_glossary_sheet(ws_glossary)
 
     # Move Report to front
     wb.move_sheet("Report", offset=-wb.index(wb["Report"]))
