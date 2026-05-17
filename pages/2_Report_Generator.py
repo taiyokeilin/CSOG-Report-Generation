@@ -86,6 +86,19 @@ def _parse_and_show(file_bytes, filename):
 if drive_available:
     with tab_drive:
         service = get_drive_service()
+        
+        files_debug = list_files_in_folder(service, folder_ids[selected_folder_idx])
+        all_files = service.files().list(
+            q=f"'{folder_ids[selected_folder_idx]}' in parents and trashed=false",
+            corpora="drive",
+            driveId=st.secrets["drive"]["shared_drive_id"],
+            includeItemsFromAllDrives=True,
+            supportsAllDrives=True,
+            fields="files(id, name, mimeType)",
+            pageSize=20,
+        ).execute()
+        st.write("All files in folder:", all_files.get("files", []))
+        
         if service:
             subfolders = list_input_subfolders(service)
             if subfolders:
