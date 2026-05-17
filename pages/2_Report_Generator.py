@@ -35,7 +35,7 @@ with title_col:
     st.markdown('<p class="sub-header">Upload a launch monitor CSV → configure clubs → download your report</p>', unsafe_allow_html=True)
 with logo_col:
     if os.path.exists("csog_logo.png"):
-        st.image("csog_logo.png", width=125)
+        st.image("csog_logo.png", width=150)
 
 
 # ── SECTION 1: Load Data File ─────────────────────────────────────────────
@@ -44,7 +44,7 @@ st.markdown('<p class="section-header">1 · Load Data File</p>', unsafe_allow_ht
 monitor_type = st.selectbox(
     "Launch Monitor",
     ["TrackMan", "Foresight", "FlightScope"],
-    help="TrackMan and Foresight: CSV. FlightScope: XLSX.",
+    help="CSV or XLSX accepted for all launch monitors.",
 )
 
 drive_available = drive_secrets_configured()
@@ -126,7 +126,7 @@ with tab_local:
     uploaded_file = st.file_uploader(
         "Upload your launch monitor file",
         type=["csv", "xlsx"],
-        help="TrackMan and Foresight: CSV. FlightScope: XLSX.",
+        help="CSV or XLSX accepted for all launch monitors.",
         key="local_upload",
     )
     if uploaded_file:

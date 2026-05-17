@@ -57,7 +57,7 @@ st.markdown('<p class="section-header">1 · Load Data File</p>', unsafe_allow_ht
 monitor_type = st.selectbox(
     "Launch Monitor",
     ["TrackMan", "Foresight", "FlightScope"],
-    help="TrackMan and Foresight: CSV. FlightScope: XLSX.",
+    help="CSV or XLSX accepted for all launch monitors.",
 )
 
 drive_available = drive_secrets_configured()
@@ -362,4 +362,3 @@ elif df is None:
     st.info("Load a file above to get started.")
 elif not supabase_configured():
     st.info("Configure Supabase credentials in Streamlit secrets to enable database saving.")
-# redeploy

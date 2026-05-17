@@ -119,7 +119,24 @@ def _decode(file_bytes: bytes) -> str:
     return file_bytes.decode("latin-1", errors="replace")
 
 
+
+def _to_csv_bytes(file_bytes: bytes) -> bytes:
+    """If bytes look like an XLSX file, convert first sheet to CSV bytes."""
+    # XLSX files start with PK (zip magic bytes)
+    if file_bytes[:2] == b'PK':
+        import openpyxl
+        wb = openpyxl.load_workbook(io.BytesIO(file_bytes))
+        ws = wb.active
+        import csv, io as _io
+        buf = _io.StringIO()
+        writer = csv.writer(buf)
+        for row in ws.iter_rows(values_only=True):
+            writer.writerow([v if v is not None else "" for v in row])
+        return buf.getvalue().encode("utf-8")
+    return file_bytes
+
 def parse_trackman(file_bytes: bytes) -> pl.DataFrame:
+    file_bytes = _to_csv_bytes(file_bytes)
     content = _decode(file_bytes)
     df = pl.read_csv(
         io.StringIO(content),
@@ -186,6 +203,7 @@ def parse_trackman(file_bytes: bytes) -> pl.DataFrame:
 
 
 def parse_foresight(file_bytes: bytes) -> pl.DataFrame:
+    file_bytes = _to_csv_bytes(file_bytes)
     content = _decode(file_bytes)
     # Read with pandas first to handle leading spaces in column names
     import pandas as _pd
