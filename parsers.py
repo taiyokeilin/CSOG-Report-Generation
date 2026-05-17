@@ -375,10 +375,104 @@ def _safe_float(val) -> float | None:
         return None
 
 
+
+def parse_trackman_normalized(file_bytes: bytes):
+    """Parse TrackMan normalized export format (skip first row, Tags-based club name)."""
+    import pandas as _pd
+
+    file_bytes = _to_csv_bytes(file_bytes)
+    content = _decode(file_bytes)
+
+    # Skip first row (metadata), second row is headers
+    df_raw = _pd.read_csv(
+        io.StringIO(content),
+        skiprows=1,
+        header=0,
+        na_values=["", "N/A", "--"],
+    )
+    # Strip whitespace from column names
+    df_raw.columns = [c.strip() for c in df_raw.columns]
+
+    # Filter out rows with no ball speed (empty/summary rows)
+    df_raw = df_raw[_pd.to_numeric(df_raw.get("Ball Speed", _pd.Series()), errors="coerce").notna()].copy()
+
+    records = []
+    club_ctr: dict[str, int] = {}
+
+    for i, row in enumerate(df_raw.to_dict("records")):
+        # Club: coalesce(Tags, Club)
+        tags = str(row.get("Tags", "") or "").strip()
+        club_raw = str(row.get("Club", "") or "").strip()
+        club = tags if tags and tags.lower() not in ("nan", "") else club_raw
+        if not club:
+            continue
+
+        club_ctr[club] = club_ctr.get(club, 0) + 1
+
+        # Distance target: try Tags first, then Club
+        target = _extract_target_from_name(tags) if tags else None
+        if target is None:
+            target = _extract_target_from_name(club_raw)
+
+        total = _safe_float(row.get("Est. Total Flat - Length"))
+        offline = _safe_float(row.get("Carry Flat - Side"))
+        carry = _safe_float(row.get("Carry Flat - Length"))
+        peak_yd = _safe_float(row.get("Max Height - Height"))
+        face_h = _safe_float(row.get("Impact Offset"))
+        face_v = _safe_float(row.get("Impact Height"))
+        cp = _safe_float(row.get("Club Path"))
+        face_angle = _safe_float(row.get("Face Angle"))
+        ftp = _safe_float(row.get("Face To Path"))
+        aoa = _safe_float(row.get("Attack Angle"))
+        spin_rate = _safe_float(row.get("Spin Rate"))
+
+        records.append({
+            "club":                        club,
+            "shot_num_session":            i + 1,
+            "shot_num_club":               club_ctr[club],
+            "ball_speed_mph":              _safe_float(row.get("Ball Speed")),
+            "launch_angle_deg":            _safe_float(row.get("Launch Angle")),
+            "side_angle_deg":              _safe_float(row.get("Launch Direction")),
+            "backspin_rpm":                None,
+            "side_spin_rpm":               None,
+            "tilt_angle_deg":              _safe_float(row.get("Spin Axis")),
+            "total_spin_rpm":              spin_rate,
+            "carry_yd":                    carry,
+            "total_yd":                    total,
+            "offline_yd":                  offline,
+            "descent_angle_deg":           _safe_float(row.get("Carry Flat - Land. Angle")),
+            "peak_height_ft":              peak_yd * 3 if peak_yd is not None else None,
+            "to_pin_ft":                   _to_pin_ft(
+                                               _safe_float(row.get("Carry Flat - Length")),
+                                               offline, target
+                                           ),
+            "club_speed_mph":              _safe_float(row.get("Club Speed")),
+            "smash_factor":                _safe_float(row.get("Smash Factor")),
+            "angle_of_attack_deg":         aoa,
+            "club_path_deg":               cp,
+            "face_angle_deg":              face_angle,
+            "face_to_path_deg":            ftp,
+            "dynamic_lie_deg":             _safe_float(row.get("Dynamic Lie")),
+            "dynamic_loft_deg":            _safe_float(row.get("Dyn. Loft")),
+            "closure_rate_dps":            None,
+            "face_impact_horizontal_mm":   face_h,
+            "face_impact_vertical_mm":     face_v,
+            "face_impact_from_center_mm":  (
+                ((face_h or 0) ** 2 + (face_v or 0) ** 2) ** 0.5
+                if face_h is not None and face_v is not None else None
+            ),
+            "date":                        str(row.get("Date", "") or ""),
+        })
+
+    import pandas as _pd2
+    return _pd2.DataFrame(records)
+
 def parse_file(file_bytes: bytes, monitor_type: str) -> pl.DataFrame:
     t = monitor_type.lower()
     if t == "trackman":
         return parse_trackman(file_bytes)
+    elif t == "trackman_normalized":
+        return parse_trackman_normalized(file_bytes)
     elif t == "foresight":
         return parse_foresight(file_bytes)
     elif t == "flightscope":

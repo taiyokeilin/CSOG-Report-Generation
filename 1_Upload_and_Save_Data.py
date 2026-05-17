@@ -56,7 +56,7 @@ st.markdown('<p class="section-header">1 · Load Data File</p>', unsafe_allow_ht
 
 monitor_type = st.selectbox(
     "Launch Monitor",
-    ["TrackMan", "Foresight", "FlightScope"],
+    ["TrackMan", "TrackMan (Normalized)", "Foresight", "FlightScope"],
     help="CSV or XLSX accepted for all launch monitors.",
 )
 
@@ -75,7 +75,7 @@ file_name = None
 def _parse_and_show(file_bytes, filename):
     try:
         with st.spinner("Parsing file…"):
-            result = parse_file(file_bytes, monitor_type.lower())
+            result = parse_file(file_bytes, monitor_type.lower().replace(" (normalized)", "_normalized").replace(" ", "_"))
         try:
             n_shots = len(result)
             n_clubs = result["club"].n_unique()
