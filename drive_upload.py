@@ -135,7 +135,21 @@ def list_input_files(service) -> list[dict]:
 
 def download_drive_file(service, file_id: str) -> bytes:
     from googleapiclient.http import MediaIoBaseDownload
-    request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
+
+    # Check MIME type — Google Sheets files need export, not direct download
+    meta = service.files().get(
+        fileId=file_id, fields="mimeType", supportsAllDrives=True
+    ).execute()
+    mime = meta.get("mimeType", "")
+
+    if mime == "application/vnd.google-apps.spreadsheet":
+        request = service.files().export_media(
+            fileId=file_id,
+            mimeType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
+
     buffer = io.BytesIO()
     downloader = MediaIoBaseDownload(buffer, request)
     done = False
