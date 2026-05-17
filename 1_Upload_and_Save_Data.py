@@ -220,9 +220,9 @@ else:
 # ── Session metadata ──────────────────────────────────────────────────────────
 m1, m2, m3, m4 = st.columns(4)
 session_date = m1.date_input("Session Date", value=date.today())
-week_label   = m2.text_input("Week", placeholder="optional")
-location_override = m3.selectbox("Location", ["Buffalo Grove", "Chicago"])
-new_program  = m4.selectbox("Program", ["Adult", "Golf for Life", "High School", "Junior", "Program 5"])
+week_label   = m2.text_input("Week", placeholder="Optional")
+location_override = m3.selectbox("Location", ["Select a location...", "Buffalo Grove", "Chicago"])
+new_program  = m4.selectbox("Program", ["Select a program...", "Adult", "Golf for Life", "High School", "Junior", "Program 5"])
 
 
 # ── SECTION 3: Save to Database ───────────────────────────────────────────────
@@ -250,7 +250,7 @@ if df is not None and supabase_configured():
                     ins = sb.table("coaches").insert({
                         "first_name": new_coach_first,
                         "last_name":  new_coach_last,
-                        "location":   location_override or None,
+                        "location":   location_override if location_override != "Select a location..." else None,
                     }).execute()
                     coach_id = ins.data[0]["coach_id"]
 
@@ -264,8 +264,8 @@ if df is not None and supabase_configured():
                         "first_name": new_player_first,
                         "last_name":  new_player_last,
                         "coach_id":   coach_id,
-                        "location":   location_override or None,
-                        "program":    new_program or None,
+                        "location":   location_override if location_override != "Select a location..." else None,
+                        "program":    new_program if new_program != "Select a program..." else None,
                     }).execute()
                     player_id = ins.data[0]["player_id"]
 
@@ -294,7 +294,7 @@ if df is not None and supabase_configured():
                     "session_date":        session_date.isoformat(),
                     "week":                week_label or None,
                     "launch_monitor_type": monitor_type.lower(),
-                    "location":            location_override or None,
+                    "location":            location_override if location_override != "Select a location..." else None,
                     "raw_file_name":       file_name,
                     "raw_file_path":       storage_path,
                 }).execute()
