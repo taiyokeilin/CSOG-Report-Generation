@@ -78,8 +78,11 @@ def list_files_in_folder(service, folder_id: str) -> list[dict]:
             f"'{folder_id}' in parents and trashed=false and ("
             "mimeType='text/csv' or "
             "mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or "
+            "mimeType='application/vnd.ms-excel' or "
             "mimeType='text/plain' or "
-            "name contains '.csv'"
+            "name contains '.csv' or "
+            "name contains '.xlsx' or "
+            "name contains '.xls'"
             ")"
         )
         results = service.files().list(
@@ -107,8 +110,11 @@ def list_input_files(service) -> list[dict]:
             f"'{input_folder_id}' in parents and trashed=false and ("
             "mimeType='text/csv' or "
             "mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or "
+            "mimeType='application/vnd.ms-excel' or "
             "mimeType='text/plain' or "
-            "name contains '.csv'"
+            "name contains '.csv' or "
+            "name contains '.xlsx' or "
+            "name contains '.xls'"
             ")"
         )
         results = service.files().list(
