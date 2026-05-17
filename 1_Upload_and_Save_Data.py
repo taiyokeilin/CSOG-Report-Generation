@@ -207,8 +207,7 @@ if sb:
             new_coach_first = c3.text_input("Coach first name")
             new_coach_last  = c4.text_input("Coach last name")
 
-        new_location = st.text_input("Location (optional)")
-        new_program  = st.text_input("Program (optional)")
+
 else:
     c1, c2 = st.columns(2)
     new_player_first = c1.text_input("Player first name")
@@ -216,14 +215,14 @@ else:
     c3, c4 = st.columns(2)
     new_coach_first = c3.text_input("Coach first name")
     new_coach_last  = c4.text_input("Coach last name")
-    new_location = ""
-    new_program  = ""
+
 
 # ── Session metadata ──────────────────────────────────────────────────────────
-m1, m2, m3 = st.columns(3)
+m1, m2, m3, m4 = st.columns(4)
 session_date = m1.date_input("Session Date", value=date.today())
 week_label   = m2.text_input("Week", placeholder="e.g. 5")
-location_override = m3.text_input("Location", placeholder="e.g. Denver")
+location_override = m3.text_input("Location")
+new_program  = m4.text_input("Program")
 
 
 # ── SECTION 3: Save to Database ───────────────────────────────────────────────
@@ -266,7 +265,7 @@ if df is not None and supabase_configured():
                         "last_name":  new_player_last,
                         "coach_id":   coach_id,
                         "location":   location_override or None,
-                        "program":    new_program if "new_program" in dir() else None,
+                        "program":    new_program or None,
                     }).execute()
                     player_id = ins.data[0]["player_id"]
 
@@ -352,7 +351,6 @@ if df is not None and supabase_configured():
                     sb.table(raw_table).insert(raw_rows[i:i + batch_size]).execute()
 
                 st.success(f"✅ Saved! {len(shot_rows)} shots from {session_date} added to database.")
-                st.balloons()
 
         except Exception as e:
             st.error(f"❌ Error saving to database: {e}")
@@ -362,5 +360,3 @@ elif df is None:
     st.info("Load a file above to get started.")
 elif not supabase_configured():
     st.info("Configure Supabase credentials in Streamlit secrets to enable database saving.")
-# redeploy
-# redeploy
