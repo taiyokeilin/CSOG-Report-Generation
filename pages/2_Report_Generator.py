@@ -1,16 +1,19 @@
 import re
 import os
 import streamlit as st
+import polars as pl
 from datetime import date
 
 from parsers import parse_file
+from report_builder import build_excel_report
 from drive_upload import (
     drive_secrets_configured, get_drive_service,
-    list_input_subfolders, list_files_in_folder, download_drive_file,
+    list_input_files, list_input_subfolders, list_files_in_folder,
+    download_drive_file, list_output_subfolders, upload_to_drive,
 )
 
 st.set_page_config(
-    page_title="Upload to Database",
+    page_title="Golf Practice Report Generator",
     page_icon="⛳",
     layout="wide",
 )
@@ -21,37 +24,21 @@ st.markdown("""
     .sub-header {font-size: 1rem; color: #555; margin-bottom: 1.5rem;}
     .section-header {font-size: 1.2rem; font-weight: 600; color: #2E75B6;
                      border-bottom: 2px solid #BDD7EE; padding-bottom: 4px; margin-top: 1.5rem;}
+    .stDataFrame {font-size: 0.85rem;}
 </style>
 """, unsafe_allow_html=True)
 
 # ── Header ────────────────────────────────────────────────────────────────────
 title_col, logo_col = st.columns([5, 1])
 with title_col:
-    st.markdown('<p class="main-header">⛳ Upload Session to Database</p>', unsafe_allow_html=True)
-    st.markdown('<p class="sub-header">Upload a launch monitor CSV → fill in session details → save to database</p>', unsafe_allow_html=True)
+    st.markdown('<p class="main-header">⛳ Golf Practice Report Generator</p>', unsafe_allow_html=True)
+    st.markdown('<p class="sub-header">Upload a launch monitor CSV → configure clubs → download your report</p>', unsafe_allow_html=True)
 with logo_col:
-    if os.path.exists("logo.png"):
-        st.image("logo.png", width=100)
+    if os.path.exists("csog_logo.png"):
+        st.image("csog_logo.png", width=150)
 
 
-# ── Supabase connection ───────────────────────────────────────────────────────
-def get_supabase():
-    try:
-        from supabase import create_client
-        url = st.secrets["supabase"]["url"]
-        key = st.secrets["supabase"]["key"]
-        return create_client(url, key)
-    except Exception as e:
-        return None
-
-def supabase_configured() -> bool:
-    try:
-        return "supabase" in st.secrets and "url" in st.secrets["supabase"] and "key" in st.secrets["supabase"]
-    except Exception:
-        return False
-
-
-# ── SECTION 1: Load File ──────────────────────────────────────────────────────
+# ── SECTION 1: Load Data File ─────────────────────────────────────────────
 st.markdown('<p class="section-header">1 · Load Data File</p>', unsafe_allow_html=True)
 
 monitor_type = st.selectbox(
@@ -69,7 +56,6 @@ else:
     tab_drive = None
 
 df = None
-file_name = None
 
 
 def _parse_and_show(file_bytes, filename):
@@ -78,11 +64,19 @@ def _parse_and_show(file_bytes, filename):
             result = parse_file(file_bytes, monitor_type.lower().replace(" (normalized)", "_normalized").replace(" ", "_"))
         try:
             n_shots = len(result)
-            n_clubs = result["club"].n_unique()
+            try:
+                n_clubs = result["club"].n_unique()
+            except AttributeError:
+                n_clubs = result["club"].nunique()
         except Exception:
             n_shots = len(result)
             n_clubs = result["club"].nunique()
         st.success(f"✅ Loaded **{filename}** — {n_shots} shots across {n_clubs} clubs")
+        with st.expander("Preview raw data", expanded=False):
+            try:
+                st.dataframe(result.head(30).to_pandas(), use_container_width=True)
+            except Exception:
+                st.dataframe(result.head(30), use_container_width=True)
         return result
     except Exception as e:
         st.error(f"❌ Failed to parse file: {e}")
@@ -98,265 +92,338 @@ if drive_available:
                 folder_names = [f[0] for f in subfolders]
                 folder_ids   = [f[1] for f in subfolders]
                 selected_folder_idx = st.selectbox(
-                    "Select folder", range(len(folder_names)),
+                    "Select folder",
+                    range(len(folder_names)),
                     format_func=lambda i: folder_names[i],
-                    key="db_input_folder",
+                    key="drive_input_folder_select",
                 )
-                files = list_files_in_folder(service, folder_ids[selected_folder_idx])
+                selected_folder_id = folder_ids[selected_folder_idx]
+                files = list_files_in_folder(service, selected_folder_id)
                 if files:
                     file_names = [f["name"] for f in files]
-                    selected_name = st.selectbox("Select a file", file_names, key="db_drive_file")
+                    selected_name = st.selectbox(
+                        "Select a file",
+                        file_names,
+                        key="drive_file_select",
+                    )
                     selected_file = next(f for f in files if f["name"] == selected_name)
-                    if st.button("Load from Drive", key="db_load_drive"):
-                        with st.spinner("Downloading…"):
-                            fb = download_drive_file(service, selected_file["id"])
-                        st.session_state.db_file_bytes = fb
-                        st.session_state.db_file_name  = selected_name
-                        st.session_state.db_df = _parse_and_show(fb, selected_name)
+                    if st.button("Load from Drive", key="load_drive"):
+                        with st.spinner("Downloading from Drive…"):
+                            file_bytes = download_drive_file(service, selected_file["id"])
+                        st.session_state.file_bytes = file_bytes
+                        st.session_state.file_name = selected_name
+                        st.session_state.df = _parse_and_show(file_bytes, selected_name)
+                    elif "df" in st.session_state and st.session_state.get("file_name") == selected_name:
+                        df = st.session_state.df
                 else:
-                    st.info("No files found in the selected folder.")
+                    st.info("No CSV or XLSX files found in the selected folder.")
             else:
-                st.error("Could not access the configured Drive folder.")
+                st.error("Could not access the configured input folder.")
         else:
-            st.error("Could not connect to Google Drive.")
+            st.error("Could not connect to Google Drive. Check secrets configuration.")
 
 with tab_local:
-    uploaded = st.file_uploader(
-        "Upload launch monitor file", type=["csv", "xlsx"], key="db_local_upload"
+    uploaded_file = st.file_uploader(
+        "Upload your launch monitor file",
+        type=["csv", "xlsx"],
+        help="CSV or XLSX accepted for all launch monitors.",
+        key="local_upload",
     )
-    if uploaded:
-        fb = uploaded.read()
-        st.session_state.db_file_bytes = fb
-        st.session_state.db_file_name  = uploaded.name
-        st.session_state.db_df = _parse_and_show(fb, uploaded.name)
+    if uploaded_file:
+        file_bytes = uploaded_file.read()
+        st.session_state.file_bytes = file_bytes
+        st.session_state.file_name = uploaded_file.name
+        st.session_state.df = _parse_and_show(file_bytes, uploaded_file.name)
 
-if "db_df" in st.session_state and st.session_state.db_df is not None:
-    df = st.session_state.db_df
-    file_name = st.session_state.db_file_name
+if "df" in st.session_state and st.session_state.df is not None:
+    df = st.session_state.df
 
 
-# ── SECTION 2: Session Details ────────────────────────────────────────────────
+# ── SECTION 2: Session Info ───────────────────────────────────────────────
 st.markdown('<p class="section-header">2 · Session Details</p>', unsafe_allow_html=True)
 
-if not supabase_configured():
-    st.warning("⚠️ Supabase is not configured. Add `[supabase]` credentials to Streamlit secrets.")
-
-sb = get_supabase() if supabase_configured() else None
-
-# ── Player lookup ─────────────────────────────────────────────────────────────
-player_id = None
-coach_id  = None
-
-if sb:
-    try:
-        players_res = sb.table("players").select("player_id, first_name, last_name").execute()
-        player_list = players_res.data or []
-        player_options = {f"{p['first_name']} {p['last_name']}": p["player_id"] for p in player_list}
-    except Exception:
-        player_options = {}
-
-    player_mode = st.radio(
-        "Player",
-        ["Select existing player", "Add new player"],
-        horizontal=True,
-    )
-
-    if player_mode == "Select existing player":
-        if player_options:
-            selected_player = st.selectbox(
-                "Select player",
-                list(player_options.keys()),
-                key="existing_player",
-            )
-            player_id = player_options[selected_player]
-
-            # Show coach for selected player
-            try:
-                player_rec = next(p for p in player_list if p["player_id"] == player_id)
-                coach_res = sb.table("coaches").select("coach_id, first_name, last_name").eq("coach_id", player_rec.get("coach_id", "")).execute()
-                if coach_res.data:
-                    c = coach_res.data[0]
-                    st.caption(f"Coach: {c['first_name']} {c['last_name']}")
-                    coach_id = c["coach_id"]
-            except Exception:
-                pass
-        else:
-            st.info("No players in database yet. Select 'Add new player'.")
-            player_mode = "Add new player"
-
-    if player_mode == "Add new player":
-        c1, c2 = st.columns(2)
-        new_player_first = c1.text_input("Player first name")
-        new_player_last  = c2.text_input("Player last name")
-
-        # Coach lookup/create
-        try:
-            coaches_res = sb.table("coaches").select("coach_id, first_name, last_name").execute()
-            coach_list  = coaches_res.data or []
-            coach_options = {f"{c['first_name']} {c['last_name']}": c["coach_id"] for c in coach_list}
-        except Exception:
-            coach_options = {}
-
-        coach_mode = st.radio("Coach", ["Select existing coach", "Add new coach"], horizontal=True)
-
-        if coach_mode == "Select existing coach" and coach_options:
-            selected_coach = st.selectbox("Select coach", list(coach_options.keys()))
-            coach_id = coach_options[selected_coach]
-        else:
-            c3, c4 = st.columns(2)
-            new_coach_first = c3.text_input("Coach first name")
-            new_coach_last  = c4.text_input("Coach last name")
+c1, c2, c3, c4 = st.columns(4)
+with c1:
+    player_name = st.text_input("Player Name", placeholder="e.g. Dave Maslen")
+with c2:
+    coach_name = st.text_input("Coach Name", placeholder="e.g. Dave Maslen")
+with c3:
+    session_date = st.date_input("Session Date", value=date.today())
+with c4:
+    week_label = st.text_input("Week", placeholder="e.g. 5")
 
 
-else:
-    c1, c2 = st.columns(2)
-    new_player_first = c1.text_input("Player first name")
-    new_player_last  = c2.text_input("Player last name")
-    c3, c4 = st.columns(2)
-    new_coach_first = c3.text_input("Coach first name")
-    new_coach_last  = c4.text_input("Coach last name")
+# ── SECTION 3: Club Configuration ────────────────────────────────────────
+st.markdown('<p class="section-header">3 · Configure Clubs</p>', unsafe_allow_html=True)
+
+SKILLS = ["Putting", "Wedge Play", "Approach", "Driving", "Other"]
+
+SKILL_TARGET_TYPES = {
+    "Wedge Play": ["Proximity", "Distance Control"],
+    "Approach":   ["Proximity", "Distance Control"],
+    "Driving":    ["Distance", "Dispersion"],
+    "Putting":    ["Proximity", "Distance Control"],
+    "Other":      ["Proximity", "Distance Control", "Distance", "Dispersion"],
+}
+
+DEFAULT_SELECTED = {
+    "Wedge Play": ["Proximity", "Distance Control"],
+    "Approach":   ["Proximity", "Distance Control"],
+    "Driving":    ["Distance", "Dispersion"],
+    "Putting":    ["Proximity"],
+    "Other":      ["Proximity"],
+}
 
 
-# ── Session metadata ──────────────────────────────────────────────────────────
-m1, m2, m3, m4 = st.columns(4)
-session_date = m1.date_input("Session Date", value=date.today())
-week_label   = m2.text_input("Week", placeholder="Optional")
-location_override = m3.selectbox("Location", ["Select a location...", "Buffalo Grove", "Chicago"])
-new_program  = m4.selectbox("Program", ["Select a program...", "Adult", "Golf for Life", "High School", "Junior", "Program 5"])
-
-
-# ── SECTION 3: Save to Database ───────────────────────────────────────────────
-st.markdown('<p class="section-header">3 · Save to Database</p>', unsafe_allow_html=True)
-
-if df is not None and supabase_configured():
-    if st.button("💾 Save to Database", type="primary"):
-        import math
-
-        def _safe(val):
-            if val is None:
-                return None
-            if isinstance(val, float) and math.isnan(val):
-                return None
+def _infer_distance(club_name):
+    if not club_name:
+        return None
+    m = re.match(r"^(\d+)", club_name.strip())
+    if m:
+        val = int(m.group(1))
+        if 10 <= val <= 300:
             return val
+    return None
+
+
+def _infer_section(club_name):
+    name = (club_name or "").lower()
+    if any(x in name for x in ["putter", "putt"]):
+        return "Putting"
+    if any(x in name for x in ["yard", "chip", "pitch", "lob", "sand", "gap", "sw", "lw", "58", "60", "52", "56"]):
+        if _infer_distance(club_name) and (_infer_distance(club_name) or 999) <= 130:
+            return "Wedge Play"
+    if any(x in name for x in ["driver", "driv", "1w"]):
+        return "Driving"
+    if any(x in name for x in ["wood", "hybrid", "iron"]):
+        return "Approach"
+    if _infer_distance(club_name) and (_infer_distance(club_name) or 0) <= 130:
+        return "Wedge Play"
+    return "Other"
+
+
+def _default_club_state(club):
+    section = _infer_section(club)
+    return {
+        "club": club,
+        "level": 5,
+        "selected_target_types": DEFAULT_SELECTED.get(section, ["Proximity"]),
+        "distance_yd": _infer_distance(club),
+        "skill": section,
+        "include": True,
+    }
+
+
+if df is not None:
+    try:
+        clubs = df["club"].unique().sort().to_list()
+    except Exception:
+        clubs = sorted(df["club"].unique().tolist())
+
+    if "club_configs" not in st.session_state:
+        st.session_state.club_configs = [_default_club_state(c) for c in clubs]
+    else:
+        existing_clubs = {cfg["club"] for cfg in st.session_state.club_configs}
+        if set(clubs) != existing_clubs:
+            st.session_state.club_configs = [_default_club_state(c) for c in clubs]
+
+    configs = st.session_state.club_configs
+
+    level_info = """**Level Multipliers**
+
+| Level | Rate Mult | Prox Mult |
+|-------|-----------|-----------|
+| 1 | 0.10 | 3.00 |
+| 2 | 0.20 | 2.50 |
+| 3 | 0.30 | 2.25 |
+| 4 | 0.40 | 2.00 |
+| 5 | 0.50 | 1.75 |
+| 6 | 0.60 | 1.50 |
+| 7 | 0.70 | 1.25 |
+| 8 | 0.80 | 1.00 |
+| 9 | 0.90 | 1.00 |
+| 10 | 1.00 | 1.00 |
+| 11 | 1.25 | 0.75 |
+| 12 | 1.50 | 0.50 |
+
+**Tour Targets**
+
+| Dist Band (yd) | Proximity (ft) | Range (yd) |
+|----------------|----------------|------------|
+| 20–29 | 6.4 | 2.0 |
+| 30–39 | 7.2 | 2.0 |
+| 40–49 | 10.4 | 3.0 |
+| 50–59 | 13.2 | 3.0 |
+| 60–79 | 13.2 | 4.0 |
+| 80–89 | 14.2 | 4.0 |
+| 90–99 | 14.2 | 4.0 |
+| 100–119 | 16.5 | 5.0 |
+| 120–129 | 16.5 | 5.0 |
+| 130–149 | 19.0 | 5.0 |
+| 150–179 | 23.0 | 6.0 |
+| 180–199 | 28.6 | 6.0 |
+| 200–209 | 28.6 | 7.0 |
+| 210–229 | 34.4 | 7.0 |
+| 230–249 | 43.2 | 8.0 |
+| 250–259 | 48.0 | 8.0 |
+"""
+
+    header_cols = st.columns([0.7, 1.8, 0.8, 1.2, 2.2, 1.5, 1.6])
+    header_cols[0].markdown("**Include**")
+    header_cols[1].markdown("**Club**")
+    header_cols[2].markdown("**Shots**")
+    header_cols[3].markdown("**Skill**")
+    header_cols[4].markdown("**Target Types**")
+    header_cols[5].markdown("**Distance (yd)**")
+    with header_cols[6]:
+        lbl_col, btn_col = st.columns([2, 1])
+        lbl_col.markdown("**Level (1–12)**")
+        with btn_col.popover("ℹ️", use_container_width=False):
+            st.markdown(level_info)
+
+    for idx, cfg in enumerate(configs):
+        row_cols = st.columns([0.7, 1.8, 0.8, 1.2, 2.2, 1.5, 1.6])
+
+        cfg["include"] = row_cols[0].checkbox(
+            "", value=cfg["include"], key=f"inc_{idx}", label_visibility="collapsed"
+        )
+        row_cols[1].markdown(
+            f"<div style='padding-top:8px'><b>{cfg['club']}</b></div>", unsafe_allow_html=True
+        )
 
         try:
-            # ── Resolve coach ──────────────────────────────────────────────
-            if coach_id is None:
-                # Create new coach
-                coach_res = sb.table("coaches").select("coach_id").eq("first_name", new_coach_first).eq("last_name", new_coach_last).execute()
-                if coach_res.data:
-                    coach_id = coach_res.data[0]["coach_id"]
-                else:
-                    ins = sb.table("coaches").insert({
-                        "first_name": new_coach_first,
-                        "last_name":  new_coach_last,
-                        "location":   location_override if location_override != "Select a location..." else None,
-                    }).execute()
-                    coach_id = ins.data[0]["coach_id"]
-
-            # ── Resolve player ─────────────────────────────────────────────
-            if player_id is None:
-                player_res = sb.table("players").select("player_id").eq("first_name", new_player_first).eq("last_name", new_player_last).execute()
-                if player_res.data:
-                    player_id = player_res.data[0]["player_id"]
-                else:
-                    ins = sb.table("players").insert({
-                        "first_name": new_player_first,
-                        "last_name":  new_player_last,
-                        "coach_id":   coach_id,
-                        "location":   location_override if location_override != "Select a location..." else None,
-                        "program":    new_program if new_program != "Select a program..." else None,
-                    }).execute()
-                    player_id = ins.data[0]["player_id"]
-
-            # ── Check for duplicate session ────────────────────────────────
-            existing = sb.table("sessions").select("session_id").eq("player_id", player_id).eq("session_date", session_date.isoformat()).eq("launch_monitor_type", monitor_type.lower()).execute()
-            if existing.data:
-                st.warning(f"⚠️ A {monitor_type} session for this player on {session_date} already exists in the database.")
+            import pandas as _pd
+            if isinstance(df, _pd.DataFrame):
+                shot_count = len(df[df["club"] == cfg["club"]])
             else:
-                # ── Upload raw file to storage ─────────────────────────────
-                storage_path = None
-                try:
-                    storage_path = f"{monitor_type.lower()}/{new_player_last if player_mode == 'Add new player' else selected_player.split()[-1]}/{session_date.isoformat()}_{file_name}"
-                    sb.storage.from_("raw-csvs").upload(
-                        path=storage_path,
-                        file=st.session_state.db_file_bytes,
-                        file_options={"content-type": "text/csv", "upsert": "true"},
-                    )
-                except Exception as e:
-                    st.warning(f"⚠️ Storage upload failed (continuing): {e}")
-                    storage_path = None
+                shot_count = len(df.filter(pl.col("club") == cfg["club"]))
+        except Exception:
+            shot_count = len(df[df["club"] == cfg["club"]])
+        row_cols[2].markdown(
+            f"<div style='padding-top:8px'>{shot_count}</div>", unsafe_allow_html=True
+        )
 
-                # ── Insert session ─────────────────────────────────────────
-                session_res = sb.table("sessions").insert({
-                    "player_id":           player_id,
-                    "coach_id":            coach_id,
-                    "session_date":        session_date.isoformat(),
-                    "week":                week_label or None,
-                    "launch_monitor_type": monitor_type.lower(),
-                    "location":            location_override if location_override != "Select a location..." else None,
-                    "raw_file_name":       file_name,
-                    "raw_file_path":       storage_path,
-                }).execute()
-                session_id = session_res.data[0]["session_id"]
+        prev_section = cfg["skill"]
+        cfg["skill"] = row_cols[3].selectbox(
+            "", SKILLS, index=SKILLS.index(cfg["skill"]),
+            key=f"sec_{idx}", label_visibility="collapsed"
+        )
+        if cfg["skill"] != prev_section:
+            cfg["selected_target_types"] = DEFAULT_SELECTED.get(cfg["skill"], ["Proximity"])
 
-                # ── Insert shots ───────────────────────────────────────────
-                try:
-                    rows = df.to_dicts()
-                except AttributeError:
-                    rows = df.to_dict("records")
+        available_types = SKILL_TARGET_TYPES.get(cfg["skill"], ["Proximity", "Distance Control"])
+        valid_selected = [t for t in cfg.get("selected_target_types", []) if t in available_types]
+        if not valid_selected:
+            valid_selected = [available_types[0]]
 
-                shot_rows = [{
-                    "session_id":                  session_id,
-                    "player_id":                   player_id,
-                    "shot_num_session":            row.get("shot_num_session"),
-                    "shot_num_club":               row.get("shot_num_club"),
-                    "club":                        row.get("club"),
-                    "ball_speed_mph":              _safe(row.get("ball_speed_mph")),
-                    "launch_angle_deg":            _safe(row.get("launch_angle_deg")),
-                    "side_angle_deg":              _safe(row.get("side_angle_deg")),
-                    "backspin_rpm":                _safe(row.get("backspin_rpm")),
-                    "side_spin_rpm":               _safe(row.get("side_spin_rpm")),
-                    "tilt_angle_deg":              _safe(row.get("tilt_angle_deg")),
-                    "total_spin_rpm":              _safe(row.get("total_spin_rpm")),
-                    "carry_yd":                    _safe(row.get("carry_yd")),
-                    "total_yd":                    _safe(row.get("total_yd")),
-                    "offline_yd":                  _safe(row.get("offline_yd")),
-                    "descent_angle_deg":           _safe(row.get("descent_angle_deg")),
-                    "peak_height_ft":              _safe(row.get("peak_height_ft")),
-                    "to_pin_ft":                   _safe(row.get("to_pin_ft")),
-                    "club_speed_mph":              _safe(row.get("club_speed_mph")),
-                    "smash_factor":                _safe(row.get("smash_factor")),
-                    "angle_of_attack_deg":         _safe(row.get("angle_of_attack_deg")),
-                    "club_path_deg":               _safe(row.get("club_path_deg")),
-                    "face_angle_deg":              _safe(row.get("face_angle_deg")),
-                    "face_to_path_deg":            _safe(row.get("face_to_path_deg")),
-                    "dynamic_lie_deg":             _safe(row.get("dynamic_lie_deg")),
-                    "dynamic_loft_deg":            _safe(row.get("dynamic_loft_deg")),
-                    "closure_rate_dps":            _safe(row.get("closure_rate_dps")),
-                    "face_impact_horizontal_mm":   _safe(row.get("face_impact_horizontal_mm")),
-                    "face_impact_vertical_mm":     _safe(row.get("face_impact_vertical_mm")),
-                    "face_impact_from_center_mm":  _safe(row.get("face_impact_from_center_mm")),
-                    "shot_date":                   row.get("date"),
-                } for row in rows]
+        cfg["selected_target_types"] = row_cols[4].multiselect(
+            "", available_types, default=valid_selected,
+            key=f"tt_{idx}", label_visibility="collapsed"
+        )
 
-                batch_size = 500
-                for i in range(0, len(shot_rows), batch_size):
-                    sb.table("shots").insert(shot_rows[i:i + batch_size]).execute()
+        dist_val = row_cols[5].number_input(
+            "", min_value=0, max_value=400, value=cfg["distance_yd"] or 0,
+            step=5, key=f"dist_{idx}", label_visibility="collapsed"
+        )
+        cfg["distance_yd"] = dist_val if dist_val > 0 else None
 
-                # ── Insert raw device rows ─────────────────────────────────
-                raw_table = f"{monitor_type.lower()}_raw"
-                raw_rows = [{"session_id": session_id, "player_id": player_id, "raw_data": {k: _safe(v) for k, v in row.items()}} for row in rows]
-                for i in range(0, len(raw_rows), batch_size):
-                    sb.table(raw_table).insert(raw_rows[i:i + batch_size]).execute()
+        cfg["level"] = row_cols[6].slider(
+            "", 1, 12, value=cfg["level"], key=f"lvl_{idx}", label_visibility="collapsed"
+        )
 
-                st.success(f"✅ Saved! {len(shot_rows)} shots from {session_date} added to database.")
+    st.session_state.club_configs = configs
 
-        except Exception as e:
-            st.error(f"❌ Error saving to database: {e}")
-            raise e
 
-elif df is None:
+# ── SECTION 4: Generate & Download Report ────────────────────────────────
+st.markdown('<p class="section-header">4 · Generate & Download Report</p>', unsafe_allow_html=True)
+
+if df is not None:
+    def expand_configs(configs):
+        rows = []
+        for cfg in configs:
+            if not cfg.get("include", True):
+                continue
+            for ttype in cfg.get("selected_target_types", ["Proximity"]):
+                rows.append({
+                    "club": cfg["club"],
+                    "level": cfg["level"],
+                    "target_type": ttype,
+                    "distance_yd": cfg["distance_yd"],
+                    "section": cfg["skill"],
+                })
+        return rows
+
+    if st.button("🏌️ Generate Report", type="primary"):
+        if not player_name:
+            st.warning("Please enter a player name.")
+        else:
+            active_configs = expand_configs(st.session_state.club_configs)
+            if not active_configs:
+                st.warning("No clubs selected. Check 'Include' for at least one club.")
+            else:
+                with st.spinner("Building report…"):
+                    session_info = {
+                        "player": player_name,
+                        "coach": coach_name,
+                        "date": session_date.strftime("%B %d, %Y"),
+                        "week": week_label,
+                    }
+                    try:
+                        logo_path = "csog_logo.png" if os.path.exists("csog_logo.png") else None
+                        excel_bytes = build_excel_report(df, session_info, active_configs, logo_path=logo_path)
+                        st.session_state.excel_bytes = excel_bytes
+                        st.session_state.report_filename = (
+                            f"{player_name.replace(' ', '_')}_{session_date.strftime('%Y%m%d')}.xlsx"
+                        )
+                        st.success("✅ Report generated!")
+                    except Exception as e:
+                        st.error(f"❌ Error generating report: {e}")
+                        raise e
+
+    if "excel_bytes" in st.session_state:
+        st.markdown("**Save report:**")
+        dl_col, drive_col = st.columns([1, 2])
+
+        with dl_col:
+            st.download_button(
+                label="⬇️ Download to Computer",
+                data=st.session_state.excel_bytes,
+                file_name=st.session_state.report_filename,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+
+        with drive_col:
+            if drive_secrets_configured():
+                service = get_drive_service()
+                if service:
+                    subfolders = list_output_subfolders(service)
+                    if subfolders:
+                        folder_names = [f[0] for f in subfolders]
+                        folder_ids   = [f[1] for f in subfolders]
+                        selected_idx = st.selectbox(
+                            "Upload to Drive folder",
+                            range(len(folder_names)),
+                            format_func=lambda i: folder_names[i],
+                            key="output_folder_select",
+                        )
+                        if st.button("☁️ Upload to Drive", use_container_width=True):
+                            with st.spinner("Uploading…"):
+                                try:
+                                    link = upload_to_drive(
+                                        service,
+                                        st.session_state.excel_bytes,
+                                        st.session_state.report_filename,
+                                        folder_ids[selected_idx],
+                                    )
+                                    st.success(f"✅ Uploaded! [Open in Drive]({link})")
+                                except Exception as e:
+                                    st.error(f"Upload failed: {e}")
+                    else:
+                        st.info("Could not access the configured output folder.")
+                else:
+                    st.error("Could not connect to Google Drive.")
+            else:
+                st.info("☁️ Google Drive not configured. See README for setup instructions.")
+else:
     st.info("Load a file above to get started.")
-elif not supabase_configured():
-    st.info("Configure Supabase credentials in Streamlit secrets to enable database saving.")
