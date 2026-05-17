@@ -220,9 +220,9 @@ else:
 # ── Session metadata ──────────────────────────────────────────────────────────
 m1, m2, m3, m4 = st.columns(4)
 session_date = m1.date_input("Session Date", value=date.today())
-week_label   = m2.text_input("Week", placeholder="e.g. 5")
-location_override = m3.text_input("Location")
-new_program  = m4.text_input("Program")
+week_label   = m2.text_input("Week", placeholder="optional")
+location_override = m3.selectbox("Location", ["Buffalo Grove", "Chicago"])
+new_program  = m4.selectbox("Program", ["Adult", "Golf for Life", "High School", "Junior", "Program 5"])
 
 
 # ── SECTION 3: Save to Database ───────────────────────────────────────────────
