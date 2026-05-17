@@ -363,3 +363,4 @@ elif df is None:
 elif not supabase_configured():
     st.info("Configure Supabase credentials in Streamlit secrets to enable database saving.")
 # redeploy
+# redeploy
