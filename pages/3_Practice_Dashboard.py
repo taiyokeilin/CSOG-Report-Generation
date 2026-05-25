@@ -312,3 +312,99 @@ else:
         height=500, legend_title="Club",
     )
     st.plotly_chart(fig3, use_container_width=True)
+
+# ── PLOT 4: Club Path vs Face Angle ──────────────────────────────────────────
+st.markdown('<p class="section-header">🔄 Club Path vs Face Angle</p>', unsafe_allow_html=True)
+
+path_cols = ["club", "club_path_deg", "face_angle_deg", "smash_factor",
+             "club_speed_mph", "ball_speed_mph", "dynamic_loft_deg",
+             "launch_angle_deg", "total_spin_rpm", "carry_yd", "offline_yd", "total_yd"]
+path_df = df[path_cols].dropna(subset=["club_path_deg", "face_angle_deg"]).copy()
+
+if path_df.empty:
+    st.info("No club path / face angle data available.")
+else:
+    # Compute smash factor: use stored value, fall back to ball_speed / club_speed
+    path_df["smash"] = path_df["smash_factor"]
+    mask = path_df["smash"].isna() & path_df["ball_speed_mph"].notna() & path_df["club_speed_mph"].notna()
+    path_df.loc[mask, "smash"] = path_df.loc[mask, "ball_speed_mph"] / path_df.loc[mask, "club_speed_mph"]
+
+    path_clubs = st.multiselect(
+        "Club(s)", sorted(path_df["club"].unique()),
+        default=[sorted(path_df["club"].unique())[0]], key="path_club"
+    )
+    path_plot_df = path_df[path_df["club"].isin(path_clubs)].copy()
+
+    # Build custom hover text
+    def fmt(val, decimals=1, suffix=""):
+        return f"{val:.{decimals}f}{suffix}" if pd.notna(val) else "—"
+
+    path_plot_df["hover"] = path_plot_df.apply(lambda r: (
+        f"<b>{r['club']}</b><br>"
+        f"Club Path: {fmt(r['club_path_deg'])}°<br>"
+        f"Face Angle: {fmt(r['face_angle_deg'])}°<br>"
+        f"Smash Factor: {fmt(r['smash'], 3)}<br>"
+        f"Club Speed: {fmt(r['club_speed_mph'])} mph<br>"
+        f"Dynamic Loft: {fmt(r['dynamic_loft_deg'])}°<br>"
+        f"Launch Angle: {fmt(r['launch_angle_deg'])}°<br>"
+        f"Spin Rate: {fmt(r['total_spin_rpm'], 0)} rpm<br>"
+        f"Carry: {fmt(r['carry_yd'])} yd<br>"
+        f"Offline: {fmt(r['offline_yd'])} yd<br>"
+        f"Total: {fmt(r['total_yd'])} yd"
+    ), axis=1)
+
+    fig4 = go.Figure()
+
+    colors_seq = px.colors.qualitative.Plotly
+    for i, club in enumerate(path_clubs):
+        cdf = path_plot_df[path_plot_df["club"] == club].copy()
+        smash_vals = cdf["smash"].dropna()
+        smash_min = smash_vals.min() if not smash_vals.empty else 1.0
+        smash_max = smash_vals.max() if not smash_vals.empty else 1.5
+
+        fig4.add_trace(go.Scatter(
+            x=cdf["club_path_deg"],
+            y=cdf["face_angle_deg"],
+            mode="markers",
+            name=club,
+            text=cdf["hover"],
+            hovertemplate="%{text}<extra></extra>",
+            marker=dict(
+                size=10,
+                color=cdf["smash"],
+                colorscale="RdYlGn",
+                cmin=smash_min,
+                cmax=smash_max,
+                showscale=(i == 0),
+                colorbar=dict(title="Smash Factor", x=1.02) if i == 0 else None,
+                line=dict(width=1, color="white"),
+                opacity=0.85,
+            ),
+        ))
+
+    # Reference lines at 0
+    fig4.add_vline(x=0, line_color="#CCCCCC", line_width=1, line_dash="dash")
+    fig4.add_hline(y=0, line_color="#CCCCCC", line_width=1, line_dash="dash")
+    # 45-degree line (face = path = perfectly square)
+    axis_range = max(
+        abs(path_plot_df["club_path_deg"]).max(),
+        abs(path_plot_df["face_angle_deg"]).max()
+    ) * 1.2 + 1
+    fig4.add_trace(go.Scatter(
+        x=[-axis_range, axis_range], y=[-axis_range, axis_range],
+        mode="lines", line=dict(color="#DDDDDD", width=1, dash="dot"),
+        name="Face = Path", showlegend=True, hoverinfo="skip",
+    ))
+
+    fig4.update_layout(
+        title=f"Club Path vs Face Angle — {', '.join(path_clubs)}",
+        xaxis_title="← In-to-Out  |  Out-to-In →  Club Path (°)",
+        yaxis_title="← Closed  |  Open →  Face Angle (°)",
+        plot_bgcolor="white", paper_bgcolor="white",
+        xaxis=dict(showgrid=False, zeroline=False,
+                   range=[-axis_range, axis_range]),
+        yaxis=dict(gridcolor="#EEEEEE", zeroline=False,
+                   range=[-axis_range, axis_range]),
+        height=550, legend_title="Club",
+    )
+    st.plotly_chart(fig4, use_container_width=True)
