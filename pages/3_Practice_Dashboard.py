@@ -243,12 +243,15 @@ disp_df = df[["club", "carry_yd", "offline_yd", "session_date"]].dropna()
 if disp_df.empty:
     st.info("No carry/offline data available.")
 else:
-    p3c1, p3c2 = st.columns([2, 1])
+    p3c1, p3c2, p3c3 = st.columns([2, 1, 1])
     with p3c1:
         disp_clubs = st.multiselect("Club(s)", sorted(disp_df["club"].unique()),
                                     default=[sorted(disp_df["club"].unique())[0]], key="disp_club")
     with p3c2:
         color_by_date = st.checkbox("Color by date", value=False, key="disp_color")
+    with p3c3:
+        intended_carry = st.number_input("Intended carry (yd)", min_value=0, max_value=400,
+                                         value=0, step=5, key="disp_target")
 
     disp_plot_df = disp_df[disp_df["club"].isin(disp_clubs)].copy()
     disp_plot_df["date_str"] = disp_plot_df["session_date"].dt.strftime("%b %d, %Y")
@@ -289,6 +292,13 @@ else:
                         line=dict(width=2, color="white")),
             hovertemplate=f"<b>{club} avg</b><br>Offline: {avg_offline:.1f} yd<br>Carry: {avg_carry:.1f} yd<extra></extra>",
         ))
+
+    # Intended carry line
+    if intended_carry > 0:
+        fig3.add_hline(y=intended_carry, line_color="#333333", line_width=2,
+                       annotation_text=f"Target: {intended_carry} yd",
+                       annotation_position="right",
+                       annotation_font=dict(color="#333333", size=12))
 
     # Always center x at 0
     fig3.add_vline(x=0, line_color="#AAAAAA", line_width=1.5)
