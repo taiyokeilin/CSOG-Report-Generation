@@ -393,14 +393,14 @@ else:
         f"Face Angle: {fmt(r['face_angle_deg'])}°<br>"
         f"Dynamic Loft: {fmt(r['dynamic_loft_deg'])}°<br>"
         f"Impact H: {fmt(r['face_impact_horizontal_mm'])} mm<br>"
-        f"Impact V: {fmt(r['face_impact_vertical_mm'])} mm"
+        f"Impact V: {fmt(r['face_impact_vertical_mm'])} mm<br>"
         f"Ball Speed: {fmt(r['ball_speed_mph'])} mph<br>"
         f"Smash Factor: {fmt(r['smash'], 3)}<br>"
         f"Launch Angle: {fmt(r['launch_angle_deg'])}°<br>"
         f"Spin Rate: {fmt(r['total_spin_rpm'], 0)} rpm<br>"
         f"Carry: {fmt(r['carry_yd'])} yd<br>"
         f"Offline: {fmt(r['offline_yd'])} yd<br>"
-        f"Total: {fmt(r['total_yd'])} yd<br>"
+        f"Total: {fmt(r['total_yd'])} yd"
     ), axis=1)
 
     fig4 = go.Figure()
@@ -457,11 +457,6 @@ else:
         abs(path_plot_df["club_path_deg"]).max(),
         abs(path_plot_df["face_angle_deg"]).max()
     ) * 1.2 + 1
-    fig4.add_trace(go.Scatter(
-        x=[-axis_range, axis_range], y=[-axis_range, axis_range],
-        mode="lines", line=dict(color="#DDDDDD", width=1, dash="dot"),
-        name="Face = Path", showlegend=True, hoverinfo="skip",
-    ))
 
     fig4.update_layout(
         title=f"Club Path vs Face Angle — {', '.join(path_clubs)}",
