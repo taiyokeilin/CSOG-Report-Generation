@@ -394,7 +394,7 @@ else:
         f"Dynamic Loft: {fmt(r['dynamic_loft_deg'])}°<br>"
         f"Impact H: {fmt(r['face_impact_horizontal_mm'])} mm<br>"
         f"Impact V: {fmt(r['face_impact_vertical_mm'])} mm"
-        f"Ball Speed: {fmt(r(['ball_speed_mph']))} mph<br>"
+        f"Ball Speed: {fmt(r['ball_speed_mph'])} mph<br>"
         f"Smash Factor: {fmt(r['smash'], 3)}<br>"
         f"Launch Angle: {fmt(r['launch_angle_deg'])}°<br>"
         f"Spin Rate: {fmt(r['total_spin_rpm'], 0)} rpm<br>"
