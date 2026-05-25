@@ -118,7 +118,7 @@ with f1:
     selected_player_name = st.selectbox("Player", list(player_options.keys()))
     selected_player_id   = player_options[selected_player_name]
 with f2:
-    date_from = st.date_input("From", value=date.today() - timedelta(days=365))
+    date_from = st.date_input("From", value=date.today() - timedelta(days=90))
 with f3:
     date_to = st.date_input("To", value=date.today())
 
@@ -136,7 +136,28 @@ if df.empty:
     st.info("No shots for the selected clubs.")
     st.stop()
 
-st.caption(f"**{len(df):,} shots** · {df['session_date'].dt.date.nunique()} sessions · {df['club'].nunique()} clubs")
+# ── Outlier detection ─────────────────────────────────────────────────────────
+# Compute per-club per-date median ball speed, flag shots ±15% outside it
+if "ball_speed_mph" in df.columns and df["ball_speed_mph"].notna().any():
+    medians = df.groupby(["club", df["session_date"].dt.date])["ball_speed_mph"].transform("median")
+    df["_is_outlier"] = (
+        df["ball_speed_mph"].notna() &
+        ((df["ball_speed_mph"] < medians * 0.85) | (df["ball_speed_mph"] > medians * 1.15))
+    )
+else:
+    df["_is_outlier"] = False
+
+n_outliers = df["_is_outlier"].sum()
+exclude_outliers = st.checkbox(
+    f"Exclude outliers ({n_outliers} shots where ball speed is >15% from club/date median)",
+    value=False,
+    key="exclude_outliers",
+)
+if exclude_outliers:
+    df = df[~df["_is_outlier"]].copy()
+
+st.caption(f"**{len(df):,} shots** · {df['session_date'].dt.date.nunique()} sessions · {df['club'].nunique()} clubs" +
+           (f" · {n_outliers} outliers excluded" if exclude_outliers else ""))
 
 
 # ── PLOT 1: Box Plot ──────────────────────────────────────────────────────────
@@ -144,7 +165,7 @@ st.markdown('<p class="section-header">📦 Metric by Date</p>', unsafe_allow_ht
 
 p1c1, p1c2 = st.columns([2, 1])
 with p1c1:
-    selected_metric_name = st.selectbox("Display metric", list(METRICS.keys()), key="box_metric")
+    selected_metric_name = st.selectbox("Y-axis metric", list(METRICS.keys()), key="box_metric")
     selected_metric_col  = METRICS[selected_metric_name]
 with p1c2:
     color_by_club = st.checkbox("Color by club", value=True, key="box_color")
@@ -155,6 +176,10 @@ plot_df["date_str"] = plot_df["session_date"].dt.strftime("%b %d")
 if plot_df.empty:
     st.info(f"No data available for {selected_metric_name}.")
 else:
+    # Need full df (pre-exclusion) for outlier highlighting when not excluded
+    plot_df_full = df[["session_date", "club", selected_metric_col, "_is_outlier"]].dropna(subset=[selected_metric_col]).copy()
+    plot_df_full["date_str"] = plot_df_full["session_date"].dt.strftime("%b %d")
+
     fig1 = px.box(
         plot_df, x="date_str", y=selected_metric_col,
         color="club" if color_by_club else None,
@@ -162,6 +187,16 @@ else:
         labels={"date_str": "Date", selected_metric_col: selected_metric_name, "club": "Club"},
         title=f"{selected_metric_name} by Date — {selected_player_name}",
     )
+    # Highlight outliers if not already excluded
+    if not exclude_outliers:
+        outlier_df = plot_df_full[plot_df_full["_is_outlier"]]
+        if not outlier_df.empty:
+            fig1.add_trace(go.Scatter(
+                x=outlier_df["date_str"], y=outlier_df[selected_metric_col],
+                mode="markers", name="Outlier",
+                marker=dict(size=10, color="red", symbol="x", line=dict(width=2, color="darkred")),
+                hovertemplate="<b>Outlier</b><br>Date: %{x}<br>Value: %{y}<extra></extra>",
+            ))
     fig1.update_layout(
         height=500, plot_bgcolor="white", paper_bgcolor="white",
         xaxis=dict(showgrid=False), yaxis=dict(gridcolor="#EEEEEE"),
@@ -278,6 +313,17 @@ else:
             fig3.update_traces(marker=dict(size=8, color="#2E75B6", opacity=0.7,
                                            line=dict(width=1, color="white")))
 
+    # Outlier overlay
+    if not exclude_outliers and "_is_outlier" in disp_plot_df.columns:
+        disp_out = disp_plot_df[disp_plot_df["_is_outlier"]]
+        if not disp_out.empty:
+            fig3.add_trace(go.Scatter(
+                x=disp_out["offline_yd"], y=disp_out["carry_yd"],
+                mode="markers", name="Outlier",
+                marker=dict(size=10, color="red", symbol="x", line=dict(width=2, color="darkred")),
+                hovertemplate="<b>Outlier</b><br>Offline: %{x:.1f} yd<br>Carry: %{y:.1f} yd<extra></extra>",
+            ))
+
     # Per-club averages
     colors = px.colors.qualitative.Plotly
     for i, club in enumerate(disp_clubs):
@@ -318,7 +364,8 @@ st.markdown('<p class="section-header">🔄 Club Path vs Face Angle</p>', unsafe
 
 path_cols = ["club", "club_path_deg", "face_angle_deg", "smash_factor",
              "club_speed_mph", "ball_speed_mph", "dynamic_loft_deg",
-             "launch_angle_deg", "total_spin_rpm", "carry_yd", "offline_yd", "total_yd"]
+             "launch_angle_deg", "total_spin_rpm", "carry_yd", "offline_yd", "total_yd",
+             "face_impact_horizontal_mm", "face_impact_vertical_mm", "_is_outlier"]
 path_df = df[path_cols].dropna(subset=["club_path_deg", "face_angle_deg"]).copy()
 
 if path_df.empty:
@@ -350,17 +397,24 @@ else:
         f"Spin Rate: {fmt(r['total_spin_rpm'], 0)} rpm<br>"
         f"Carry: {fmt(r['carry_yd'])} yd<br>"
         f"Offline: {fmt(r['offline_yd'])} yd<br>"
-        f"Total: {fmt(r['total_yd'])} yd"
+        f"Total: {fmt(r['total_yd'])} yd<br>"
+        f"Impact H: {fmt(r['face_impact_horizontal_mm'])} mm<br>"
+        f"Impact V: {fmt(r['face_impact_vertical_mm'])} mm"
     ), axis=1)
 
     fig4 = go.Figure()
 
-    colors_seq = px.colors.qualitative.Plotly
+    SHAPES = ["circle", "square", "diamond", "triangle-up", "cross",
+              "star", "hexagon", "pentagon", "triangle-down", "x"]
+
+    # Compute global smash range across all clubs for consistent colorscale
+    all_smash = path_plot_df["smash"].dropna()
+    smash_min = all_smash.min() if not all_smash.empty else 1.0
+    smash_max = all_smash.max() if not all_smash.empty else 1.5
+
     for i, club in enumerate(path_clubs):
         cdf = path_plot_df[path_plot_df["club"] == club].copy()
-        smash_vals = cdf["smash"].dropna()
-        smash_min = smash_vals.min() if not smash_vals.empty else 1.0
-        smash_max = smash_vals.max() if not smash_vals.empty else 1.5
+        shape = SHAPES[i % len(SHAPES)]
 
         fig4.add_trace(go.Scatter(
             x=cdf["club_path_deg"],
@@ -371,16 +425,28 @@ else:
             hovertemplate="%{text}<extra></extra>",
             marker=dict(
                 size=10,
+                symbol=shape,
                 color=cdf["smash"],
                 colorscale="RdYlGn",
                 cmin=smash_min,
                 cmax=smash_max,
                 showscale=(i == 0),
-                colorbar=dict(title="Smash Factor", x=1.02) if i == 0 else None,
+                colorbar=dict(title="Smash Factor", x=1.02, len=0.5, yanchor="top", y=1) if i == 0 else None,
                 line=dict(width=1, color="white"),
                 opacity=0.85,
             ),
         ))
+
+    # Outlier overlay
+    if not exclude_outliers and "_is_outlier" in path_plot_df.columns:
+        path_out = path_plot_df[path_plot_df["_is_outlier"]]
+        if not path_out.empty:
+            fig4.add_trace(go.Scatter(
+                x=path_out["club_path_deg"], y=path_out["face_angle_deg"],
+                mode="markers", name="Outlier",
+                marker=dict(size=12, color="red", symbol="x", line=dict(width=2, color="darkred")),
+                hovertemplate="<b>Outlier</b><br>Path: %{x:.1f}°<br>Face: %{y:.1f}°<extra></extra>",
+            ))
 
     # Reference lines at 0
     fig4.add_vline(x=0, line_color="#CCCCCC", line_width=1, line_dash="dash")
