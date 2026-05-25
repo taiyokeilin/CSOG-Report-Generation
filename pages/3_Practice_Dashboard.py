@@ -16,7 +16,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown('<p class="main-header">⛳ Practice Dashboard</p>', unsafe_allow_html=True)
-st.markdown('<p class="sub-header">Query and visualize shot data from Supabase</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-header">Select a player and date range to view their development</p>', unsafe_allow_html=True)
 
 
 # ── Supabase connection ───────────────────────────────────────────────────────
@@ -178,31 +178,59 @@ impact_df = df[["club", "face_impact_horizontal_mm", "face_impact_vertical_mm"]]
 if impact_df.empty:
     st.info("No face impact data available.")
 else:
-    impact_club = st.selectbox("Club", sorted(impact_df["club"].unique()), key="impact_club")
-    impact_plot_df = impact_df[impact_df["club"] == impact_club]
+    impact_clubs = st.multiselect("Club(s)", sorted(impact_df["club"].unique()),
+                                  default=[sorted(impact_df["club"].unique())[0]], key="impact_club")
+    impact_plot_df = impact_df[impact_df["club"].isin(impact_clubs)].copy()
 
+    import numpy as np
     fig2 = go.Figure()
-    fig2.add_shape(type="rect", x0=-22.5, x1=22.5, y0=-17.5, y1=17.5,
-                   line=dict(color="#AAAAAA", width=2), fillcolor="rgba(240,240,240,0.3)")
-    fig2.add_shape(type="line", x0=0, x1=0, y0=-17.5, y1=17.5,
-                   line=dict(color="#CCCCCC", width=1, dash="dash"))
-    fig2.add_shape(type="line", x0=-22.5, x1=22.5, y0=0, y1=0,
-                   line=dict(color="#CCCCCC", width=1, dash="dash"))
+
+    # Club face outline — circle with 20mm radius
+    theta = np.linspace(0, 2 * np.pi, 200)
     fig2.add_trace(go.Scatter(
-        x=impact_plot_df["face_impact_horizontal_mm"],
-        y=impact_plot_df["face_impact_vertical_mm"],
-        mode="markers",
-        marker=dict(size=8, color="#2E75B6", opacity=0.7, line=dict(width=1, color="white")),
-        hovertemplate="Horizontal: %{x:.1f} mm<br>Vertical: %{y:.1f} mm<extra></extra>",
+        x=20 * np.cos(theta), y=20 * np.sin(theta),
+        mode="lines", line=dict(color="#AAAAAA", width=2),
+        fill="toself", fillcolor="rgba(240,240,240,0.3)",
+        showlegend=False, hoverinfo="skip",
     ))
+    # Crosshairs
+    fig2.add_shape(type="line", x0=0, x1=0, y0=-20, y1=20,
+                   line=dict(color="#CCCCCC", width=1, dash="dash"))
+    fig2.add_shape(type="line", x0=-20, x1=20, y0=0, y1=0,
+                   line=dict(color="#CCCCCC", width=1, dash="dash"))
+
+    colors = px.colors.qualitative.Plotly
+    for i, club in enumerate(impact_clubs):
+        club_df = impact_plot_df[impact_plot_df["club"] == club]
+        color = colors[i % len(colors)]
+        avg_h = club_df["face_impact_horizontal_mm"].mean()
+        avg_v = club_df["face_impact_vertical_mm"].mean()
+
+        # Individual shots — note: toe positive, heel negative
+        fig2.add_trace(go.Scatter(
+            x=club_df["face_impact_horizontal_mm"],
+            y=club_df["face_impact_vertical_mm"],
+            mode="markers", name=club,
+            marker=dict(size=8, color=color, opacity=0.6, line=dict(width=1, color="white")),
+            hovertemplate=f"<b>{club}</b><br>Horizontal: %{{x:.1f}} mm<br>Vertical: %{{y:.1f}} mm<extra></extra>",
+        ))
+        # Average dot
+        fig2.add_trace(go.Scatter(
+            x=[avg_h], y=[avg_v],
+            mode="markers", name=f"{club} avg",
+            marker=dict(size=16, color=color, symbol="circle",
+                        line=dict(width=2, color="white")),
+            hovertemplate=f"<b>{club} avg</b><br>Horizontal: {avg_h:.1f} mm<br>Vertical: {avg_v:.1f} mm<extra></extra>",
+        ))
+
     fig2.update_layout(
-        title=f"Face Impact — {impact_club}",
-        xaxis_title="Horizontal (mm)  ←  Toe  |  Heel  →",
-        yaxis_title="Vertical (mm)  ←  Low  |  High  →",
-        xaxis=dict(range=[-30, 30], showgrid=False, zeroline=False),
-        yaxis=dict(range=[-25, 25], showgrid=False, zeroline=False, scaleanchor="x"),
+        title=f"Face Impact — {', '.join(impact_clubs)}",
+        xaxis_title="← Heel  |  Toe →  (mm)",
+        yaxis_title="← Low  |  High →  (mm)",
+        xaxis=dict(range=[-28, 28], showgrid=False, zeroline=False),
+        yaxis=dict(range=[-28, 28], showgrid=False, zeroline=False, scaleanchor="x"),
         plot_bgcolor="white", paper_bgcolor="white",
-        height=450,
+        height=500, legend_title="Club",
     )
     st.plotly_chart(fig2, use_container_width=False)
 
@@ -217,43 +245,60 @@ if disp_df.empty:
 else:
     p3c1, p3c2 = st.columns([2, 1])
     with p3c1:
-        disp_club = st.selectbox("Club", sorted(disp_df["club"].unique()), key="disp_club")
+        disp_clubs = st.multiselect("Club(s)", sorted(disp_df["club"].unique()),
+                                    default=[sorted(disp_df["club"].unique())[0]], key="disp_club")
     with p3c2:
         color_by_date = st.checkbox("Color by date", value=False, key="disp_color")
 
-    disp_plot_df = disp_df[disp_df["club"] == disp_club].copy()
+    disp_plot_df = disp_df[disp_df["club"].isin(disp_clubs)].copy()
     disp_plot_df["date_str"] = disp_plot_df["session_date"].dt.strftime("%b %d, %Y")
 
-    avg_carry   = disp_plot_df["carry_yd"].mean()
-    avg_offline = disp_plot_df["offline_yd"].mean()
+    # Symmetric x-axis around 0
+    max_offline = disp_plot_df["offline_yd"].abs().max()
+    x_range = [-max_offline * 1.2 - 1, max_offline * 1.2 + 1]
 
     if color_by_date:
         fig3 = px.scatter(
             disp_plot_df, x="offline_yd", y="carry_yd", color="date_str",
-            labels={"offline_yd": "Offline (yd)", "carry_yd": "Carry (yd)", "date_str": "Date"},
-            title=f"Carry Dispersion — {disp_club}",
+            symbol="club" if len(disp_clubs) > 1 else None,
+            labels={"offline_yd": "Offline (yd)", "carry_yd": "Carry (yd)", "date_str": "Date", "club": "Club"},
+            title=f"Carry Dispersion — {', '.join(disp_clubs)}",
         )
     else:
         fig3 = px.scatter(
             disp_plot_df, x="offline_yd", y="carry_yd",
-            labels={"offline_yd": "Offline (yd)", "carry_yd": "Carry (yd)"},
-            title=f"Carry Dispersion — {disp_club}",
+            color="club" if len(disp_clubs) > 1 else None,
+            labels={"offline_yd": "Offline (yd)", "carry_yd": "Carry (yd)", "club": "Club"},
+            title=f"Carry Dispersion — {', '.join(disp_clubs)}",
         )
-        fig3.update_traces(marker=dict(size=8, color="#2E75B6", opacity=0.7,
-                                       line=dict(width=1, color="white")))
+        if len(disp_clubs) == 1:
+            fig3.update_traces(marker=dict(size=8, color="#2E75B6", opacity=0.7,
+                                           line=dict(width=1, color="white")))
 
-    fig3.add_hline(y=avg_carry, line_dash="dash", line_color="#888888",
-                   annotation_text=f"Avg: {avg_carry:.1f} yd", annotation_position="right")
-    fig3.add_vline(x=avg_offline, line_dash="dash", line_color="#888888",
-                   annotation_text=f"Avg: {avg_offline:.1f} yd", annotation_position="top")
-    fig3.add_vline(x=0, line_color="#DDDDDD", line_width=1)
+    # Per-club averages
+    colors = px.colors.qualitative.Plotly
+    for i, club in enumerate(disp_clubs):
+        club_data = disp_plot_df[disp_plot_df["club"] == club]
+        avg_carry   = club_data["carry_yd"].mean()
+        avg_offline = club_data["offline_yd"].mean()
+        color = colors[i % len(colors)] if len(disp_clubs) > 1 else "#2E75B6"
+        fig3.add_trace(go.Scatter(
+            x=[avg_offline], y=[avg_carry], mode="markers",
+            name=f"{club} avg",
+            marker=dict(size=16, color=color, symbol="circle",
+                        line=dict(width=2, color="white")),
+            hovertemplate=f"<b>{club} avg</b><br>Offline: {avg_offline:.1f} yd<br>Carry: {avg_carry:.1f} yd<extra></extra>",
+        ))
+
+    # Always center x at 0
+    fig3.add_vline(x=0, line_color="#AAAAAA", line_width=1.5)
 
     fig3.update_layout(
-        xaxis_title="Offline (yd)  ←  Left  |  Right  →",
+        xaxis_title="← Left  |  Right →  (yd)",
         yaxis_title="Carry (yd)",
         plot_bgcolor="white", paper_bgcolor="white",
-        xaxis=dict(showgrid=False, zeroline=False),
+        xaxis=dict(showgrid=False, zeroline=False, range=x_range),
         yaxis=dict(gridcolor="#EEEEEE"),
-        height=500,
+        height=500, legend_title="Club",
     )
     st.plotly_chart(fig3, use_container_width=True)
