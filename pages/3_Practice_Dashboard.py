@@ -118,7 +118,7 @@ with f1:
     selected_player_name = st.selectbox("Player", list(player_options.keys()))
     selected_player_id   = player_options[selected_player_name]
 with f2:
-    date_from = st.date_input("From", value=date.today() - timedelta(days=90))
+    date_from = st.date_input("From", value=date.today() - timedelta(days=365))
 with f3:
     date_to = st.date_input("To", value=date.today())
 
