@@ -118,7 +118,7 @@ with f1:
     selected_player_name = st.selectbox("Player", list(player_options.keys()))
     selected_player_id   = player_options[selected_player_name]
 with f2:
-    date_from = st.date_input("From", value=date.today() - timedelta(days=90))
+    date_from = st.date_input("From", value=date.today() - timedelta(days=365))
 with f3:
     date_to = st.date_input("To", value=date.today())
 
@@ -144,7 +144,7 @@ st.markdown('<p class="section-header">📦 Metric by Date</p>', unsafe_allow_ht
 
 p1c1, p1c2 = st.columns([2, 1])
 with p1c1:
-    selected_metric_name = st.selectbox("Y-axis metric", list(METRICS.keys()), key="box_metric")
+    selected_metric_name = st.selectbox("Display metric", list(METRICS.keys()), key="box_metric")
     selected_metric_col  = METRICS[selected_metric_name]
 with p1c2:
     color_by_club = st.checkbox("Color by club", value=True, key="box_color")
@@ -398,13 +398,15 @@ else:
 
     fig4.update_layout(
         title=f"Club Path vs Face Angle — {', '.join(path_clubs)}",
-        xaxis_title="← In-to-Out  |  Out-to-In →  Club Path (°)",
-        yaxis_title="← Closed  |  Open →  Face Angle (°)",
+        xaxis_title="Club Path (°)<br><sub>← Out-to-In  |  In-to-Out →</sub>",
+        yaxis_title="Face Angle (°)<br><sub>← Closed  |  Open →</sub>",
         plot_bgcolor="white", paper_bgcolor="white",
         xaxis=dict(showgrid=False, zeroline=False,
                    range=[-axis_range, axis_range]),
         yaxis=dict(gridcolor="#EEEEEE", zeroline=False,
                    range=[-axis_range, axis_range]),
         height=550, legend_title="Club",
+        legend=dict(x=1.12),
+        coloraxis_colorbar=dict(x=1.02, len=0.5, yanchor="top", y=1),
     )
     st.plotly_chart(fig4, use_container_width=True)
