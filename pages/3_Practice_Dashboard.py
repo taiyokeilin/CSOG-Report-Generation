@@ -163,21 +163,24 @@ st.caption(f"**{len(df):,} shots** · {df['session_date'].dt.date.nunique()} ses
 # ── PLOT 1: Box Plot ──────────────────────────────────────────────────────────
 st.markdown('<p class="section-header">📦 Metric by Date</p>', unsafe_allow_html=True)
 
-p1c1, p1c2 = st.columns([2, 1])
+p1c1, p1c2, p1c3 = st.columns([2, 2, 1])
 with p1c1:
-    selected_metric_name = st.selectbox("Y-axis metric", list(METRICS.keys()), key="box_metric")
+    selected_metric_name = st.selectbox("Display Metric", list(METRICS.keys()), key="box_metric")
     selected_metric_col  = METRICS[selected_metric_name]
 with p1c2:
+    box_clubs_available = sorted(df["club"].dropna().unique().tolist())
+    box_clubs = st.multiselect("Club(s)", box_clubs_available, default=box_clubs_available, key="box_clubs")
+with p1c3:
     color_by_club = st.checkbox("Color by club", value=True, key="box_color")
 
-plot_df = df[["session_date", "club", selected_metric_col]].dropna(subset=[selected_metric_col]).copy()
+plot_df = df[df["club"].isin(box_clubs)][["session_date", "club", selected_metric_col]].dropna(subset=[selected_metric_col]).copy()
 plot_df["date_str"] = plot_df["session_date"].dt.strftime("%b %d")
 
 if plot_df.empty:
     st.info(f"No data available for {selected_metric_name}.")
 else:
     # Need full df (pre-exclusion) for outlier highlighting when not excluded
-    plot_df_full = df[["session_date", "club", selected_metric_col, "_is_outlier"]].dropna(subset=[selected_metric_col]).copy()
+    plot_df_full = df[df["club"].isin(box_clubs)][["session_date", "club", selected_metric_col, "_is_outlier"]].dropna(subset=[selected_metric_col]).copy()
     plot_df_full["date_str"] = plot_df_full["session_date"].dt.strftime("%b %d")
 
     fig1 = px.box(
