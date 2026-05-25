@@ -388,18 +388,19 @@ else:
 
     path_plot_df["hover"] = path_plot_df.apply(lambda r: (
         f"<b>{r['club']}</b><br>"
+        f"Club Speed: {fmt(r['club_speed_mph'])} mph<br>"
         f"Club Path: {fmt(r['club_path_deg'])}°<br>"
         f"Face Angle: {fmt(r['face_angle_deg'])}°<br>"
-        f"Smash Factor: {fmt(r['smash'], 3)}<br>"
-        f"Club Speed: {fmt(r['club_speed_mph'])} mph<br>"
         f"Dynamic Loft: {fmt(r['dynamic_loft_deg'])}°<br>"
+        f"Impact H: {fmt(r['face_impact_horizontal_mm'])} mm<br>"
+        f"Impact V: {fmt(r['face_impact_vertical_mm'])} mm"
+        f"Ball Speed: {fmt(r(['ball_speed_mph']))} mph<br>"
+        f"Smash Factor: {fmt(r['smash'], 3)}<br>"
         f"Launch Angle: {fmt(r['launch_angle_deg'])}°<br>"
         f"Spin Rate: {fmt(r['total_spin_rpm'], 0)} rpm<br>"
         f"Carry: {fmt(r['carry_yd'])} yd<br>"
         f"Offline: {fmt(r['offline_yd'])} yd<br>"
         f"Total: {fmt(r['total_yd'])} yd<br>"
-        f"Impact H: {fmt(r['face_impact_horizontal_mm'])} mm<br>"
-        f"Impact V: {fmt(r['face_impact_vertical_mm'])} mm"
     ), axis=1)
 
     fig4 = go.Figure()
