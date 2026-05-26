@@ -281,7 +281,7 @@ disp_df = df[["club", "carry_yd", "offline_yd", "session_date"]].dropna()
 if disp_df.empty:
     st.info("No carry/offline data available.")
 else:
-    p3c1, p3c2, p3c3 = st.columns([2, 1, 1])
+    p3c1, p3c2, p3c3, p3c4, p3c5 = st.columns([2, 1, 1, 1, 1])
     with p3c1:
         disp_clubs = st.multiselect("Club(s)", sorted(disp_df["club"].unique()),
                                     default=[sorted(disp_df["club"].unique())[0]], key="disp_club")
@@ -290,6 +290,10 @@ else:
     with p3c3:
         intended_carry = st.number_input("Intended carry (yd)", min_value=0, max_value=400,
                                          value=0, step=5, key="disp_target")
+    with p3c4:
+        disp_level = st.slider("Level", 1, 12, value=5, key="disp_level")
+    with p3c5:
+        show_proximity = st.checkbox("Show proximity circle", value=False, key="disp_prox")
 
     disp_plot_df = disp_df[disp_df["club"].isin(disp_clubs)].copy()
     disp_plot_df["date_str"] = disp_plot_df["session_date"].dt.strftime("%b %d, %Y")
@@ -348,6 +352,49 @@ else:
                        annotation_text=f"Target: {intended_carry} yd",
                        annotation_position="right",
                        annotation_font=dict(color="#333333", size=12))
+
+    # Proximity circles
+    if show_proximity and intended_carry > 0:
+        import sys, os
+        sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+        from data.tour_targets import get_tour_target, get_level_multipliers
+        import numpy as np
+
+        prox_ft, _, _ = get_tour_target(intended_carry)
+        _, prox_mult = get_level_multipliers(disp_level)
+        if prox_ft is not None and prox_mult is not None:
+            target_prox_ft = prox_ft * prox_mult
+            target_prox_yd = target_prox_ft / 3
+
+            theta = np.linspace(0, 2 * np.pi, 200)
+            # Target proximity circle (centered on intended carry)
+            fig3.add_trace(go.Scatter(
+                x=target_prox_yd * np.cos(theta),
+                y=intended_carry + target_prox_yd * np.sin(theta),
+                mode="lines", name=f"Target ({target_prox_ft:.1f}ft)",
+                line=dict(color="#2E75B6", width=2, dash="dash"),
+                hoverinfo="skip",
+            ))
+
+            # Actual average proximity circle (use first selected club)
+            first_club_data = disp_plot_df[disp_plot_df["club"] == disp_clubs[0]] if disp_clubs else disp_plot_df
+            if not first_club_data.empty and first_club_data[["carry_yd","offline_yd"]].notna().all(axis=1).any():
+                import math
+                proximities = [
+                    math.sqrt((r["offline_yd"]**2) + ((intended_carry - r["carry_yd"])**2))
+                    for _, r in first_club_data.iterrows()
+                    if pd.notna(r["offline_yd"]) and pd.notna(r["carry_yd"])
+                ]
+                if proximities:
+                    avg_prox_yd = sum(proximities) / len(proximities)
+                    avg_prox_ft = avg_prox_yd * 3
+                    fig3.add_trace(go.Scatter(
+                        x=avg_prox_yd * np.cos(theta),
+                        y=intended_carry + avg_prox_yd * np.sin(theta),
+                        mode="lines", name=f"Actual avg ({avg_prox_ft:.1f}ft)",
+                        line=dict(color="#E07B39", width=2, dash="dot"),
+                        hoverinfo="skip",
+                    ))
 
     # Always center x at 0
     fig3.add_vline(x=0, line_color="#AAAAAA", line_width=1.5)
