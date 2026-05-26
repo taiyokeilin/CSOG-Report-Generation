@@ -309,10 +309,10 @@ else:
         def _fmt_prox(ft):
             if ft is None or pd.isna(ft): return "—"
             total_in = ft * 12
-            f = int(total_in // 12)
-            i = round(total_in % 12)
-            if i == 12: f += 1; i = 0
-            return f"{f}\'{i}\"
+            feet = int(total_in // 12)
+            inches = round(total_in % 12)
+            if inches == 12: feet += 1; inches = 0
+            return str(feet) + "\'" + str(inches) + "\""
         disp_plot_df["prox_str"] = disp_plot_df["proximity_ft"].apply(_fmt_prox)
     else:
         disp_plot_df["prox_str"] = None
