@@ -162,7 +162,7 @@ st.caption(f"**{len(df):,} shots** · {df['session_date'].dt.date.nunique()} ses
 
 
 # ── PLOT 1: Box Plot ──────────────────────────────────────────────────────────
-st.markdown('<p class="section-header">📦 Metric by Date</p>', unsafe_allow_html=True)
+st.markdown('<p class="section-header">📊 Metric by Date</p>', unsafe_allow_html=True)
 
 p1c1, p1c2, p1c3 = st.columns([2, 2, 1])
 with p1c1:
