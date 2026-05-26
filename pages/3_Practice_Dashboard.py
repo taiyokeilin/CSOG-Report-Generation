@@ -384,7 +384,7 @@ else:
 
 
 # ── PLOTS 3 & 4: Face Impact + Club Path vs Face Angle (side by side) ──────
-st.markdown('<p class="section-header">🎯 Face Impact &nbsp;&nbsp;|&nbsp;&nbsp; 🔄 Club Path vs Face Angle</p>', unsafe_allow_html=True)
+st.markdown('<p class="section-header">🎯 Strike Location &nbsp;&nbsp;|&nbsp;&nbsp; 🔄 Delivery</p>', unsafe_allow_html=True)
 
 # Shared club filter
 _all_clubs_34 = sorted(df["club"].dropna().unique().tolist())
@@ -398,7 +398,7 @@ with _col_impact:
     impact_df = df[df["club"].isin(impact_clubs)][["club", "face_impact_horizontal_mm", "face_impact_vertical_mm"]].dropna()
 
     if impact_df.empty:
-        st.info("No face impact data available.")
+        st.info("No strike location data available.")
     else:
         impact_plot_df = impact_df.copy()
 
@@ -444,7 +444,7 @@ with _col_impact:
             ))
 
         fig2.update_layout(
-            title=f"Face Impact — {', '.join(impact_clubs)}",
+            title=f"Strike Location — {', '.join(impact_clubs)}",
             xaxis_title="← Heel  |  Toe →  (mm)",
             yaxis_title="← Low  |  High →  (mm)",
             xaxis=dict(range=[-28, 28], showgrid=False, zeroline=False),
