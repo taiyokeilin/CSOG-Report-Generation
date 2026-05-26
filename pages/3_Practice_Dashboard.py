@@ -384,7 +384,7 @@ else:
 
 
 # ── PLOTS 3 & 4: Face Impact + Club Path vs Face Angle (side by side) ──────
-st.markdown('<p class="section-header">🎯 Strike Location &nbsp;&nbsp;|&nbsp;&nbsp; 🔄 Delivery</p>', unsafe_allow_html=True)
+st.markdown('<p class="section-header">🎯 Strike Location &nbsp;&nbsp;|&nbsp;&nbsp; 📦 Delivery</p>', unsafe_allow_html=True)
 
 # Shared club filter
 _all_clubs_34 = sorted(df["club"].dropna().unique().tolist())
