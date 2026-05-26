@@ -298,9 +298,40 @@ else:
     disp_plot_df = disp_df[disp_df["club"].isin(disp_clubs)].copy()
     disp_plot_df["date_str"] = disp_plot_df["session_date"].dt.strftime("%b %d, %Y")
 
+    # Proximity to hole if intended carry set
+    if intended_carry > 0:
+        import math as _math
+        def _prox(row):
+            if pd.isna(row["carry_yd"]) or pd.isna(row["offline_yd"]):
+                return None
+            return _math.sqrt(row["offline_yd"]**2 + (intended_carry - row["carry_yd"])**2) * 3
+        disp_plot_df["proximity_ft"] = disp_plot_df.apply(_prox, axis=1)
+        def _fmt_prox(ft):
+            if ft is None or pd.isna(ft): return "—"
+            total_in = ft * 12
+            f = int(total_in // 12)
+            i = round(total_in % 12)
+            if i == 12: f += 1; i = 0
+            return f"{f}\'{i}\"
+        disp_plot_df["prox_str"] = disp_plot_df["proximity_ft"].apply(_fmt_prox)
+    else:
+        disp_plot_df["prox_str"] = None
+
     # Symmetric x-axis around 0
     max_offline = disp_plot_df["offline_yd"].abs().max()
     x_range = [-max_offline * 1.2 - 1, max_offline * 1.2 + 1]
+
+    has_prox = intended_carry > 0 and "prox_str" in disp_plot_df.columns
+
+    def _build_disp_hover(row):
+        s = (f"<b>{row['club']}</b><br>"
+             f"Carry: {row['carry_yd']:.1f} yd<br>"
+             f"Offline: {row['offline_yd']:.1f} yd")
+        if has_prox and row.get("prox_str"):
+            s += f"<br>Proximity: {row['prox_str']}"
+        return s
+
+    disp_plot_df["hover_text"] = disp_plot_df.apply(_build_disp_hover, axis=1)
 
     if color_by_date:
         fig3 = px.scatter(
@@ -319,6 +350,11 @@ else:
         if len(disp_clubs) == 1:
             fig3.update_traces(marker=dict(size=8, color="#2E75B6", opacity=0.7,
                                            line=dict(width=1, color="white")))
+
+    fig3.update_traces(
+        text=disp_plot_df["hover_text"],
+        hovertemplate="%{text}<extra></extra>",
+    )
 
     # Outlier overlay
     if not exclude_outliers and "_is_outlier" in disp_plot_df.columns:
