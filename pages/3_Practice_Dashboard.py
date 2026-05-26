@@ -385,17 +385,22 @@ else:
 
 # ── PLOTS 3 & 4: Face Impact + Club Path vs Face Angle (side by side) ──────
 st.markdown('<p class="section-header">🎯 Face Impact &nbsp;&nbsp;|&nbsp;&nbsp; 🔄 Club Path vs Face Angle</p>', unsafe_allow_html=True)
+
+# Shared club filter
+_all_clubs_34 = sorted(df["club"].dropna().unique().tolist())
+impact_clubs = st.multiselect("Club(s)", _all_clubs_34,
+                               default=[_all_clubs_34[0]] if _all_clubs_34 else [],
+                               key="impact_club")
+
 _col_impact, _col_path = st.columns(2)
 
 with _col_impact:
-    impact_df = df[["club", "face_impact_horizontal_mm", "face_impact_vertical_mm"]].dropna()
+    impact_df = df[df["club"].isin(impact_clubs)][["club", "face_impact_horizontal_mm", "face_impact_vertical_mm"]].dropna()
 
     if impact_df.empty:
         st.info("No face impact data available.")
     else:
-        impact_clubs = st.multiselect("Club(s)", sorted(impact_df["club"].unique()),
-                                      default=[sorted(impact_df["club"].unique())[0]], key="impact_club")
-        impact_plot_df = impact_df[impact_df["club"].isin(impact_clubs)].copy()
+        impact_plot_df = impact_df.copy()
 
         import numpy as np
         fig2 = go.Figure()
@@ -452,7 +457,7 @@ with _col_impact:
 
 with _col_path:
     path_cols = ["club", "club_path_deg", "face_angle_deg", "smash_factor",
-                 "club_speed_mph", "ball_speed_mph", "dynamic_loft_deg",
+                 "club_speed_mph", "ball_speed_mph", "angle_of_attack_deg", "dynamic_loft_deg",
                  "launch_angle_deg", "total_spin_rpm", "carry_yd", "offline_yd", "total_yd",
                  "face_impact_horizontal_mm", "face_impact_vertical_mm", "_is_outlier"]
     path_df = df[path_cols].dropna(subset=["club_path_deg", "face_angle_deg"]).copy()
@@ -460,15 +465,12 @@ with _col_path:
     if path_df.empty:
         st.info("No club path / face angle data available.")
     else:
-        # Compute smash factor: use stored value, fall back to ball_speed / club_speed
+        # Compute smash factor for tooltip
         path_df["smash"] = path_df["smash_factor"]
         mask = path_df["smash"].isna() & path_df["ball_speed_mph"].notna() & path_df["club_speed_mph"].notna()
         path_df.loc[mask, "smash"] = path_df.loc[mask, "ball_speed_mph"] / path_df.loc[mask, "club_speed_mph"]
 
-        path_clubs = st.multiselect(
-            "Club(s)", sorted(path_df["club"].unique()),
-            default=[sorted(path_df["club"].unique())[0]], key="path_club"
-        )
+        path_clubs = impact_clubs  # shared with face impact selector
         path_plot_df = path_df[path_df["club"].isin(path_clubs)].copy()
 
         # Build custom hover text
@@ -478,6 +480,7 @@ with _col_path:
         path_plot_df["hover"] = path_plot_df.apply(lambda r: (
             f"<b>{r['club']}</b><br>"
             f"Club Speed: {fmt(r['club_speed_mph'])} mph<br>"
+            f"Angle of Attack: {fmt(r['angle_of_attack_deg'])}°<br>"
             f"Club Path: {fmt(r['club_path_deg'])}°<br>"
             f"Face Angle: {fmt(r['face_angle_deg'])}°<br>"
             f"Dynamic Loft: {fmt(r['dynamic_loft_deg'])}°<br>"
@@ -497,10 +500,10 @@ with _col_path:
         SHAPES = ["circle", "square", "diamond", "triangle-up", "cross",
                   "star", "hexagon", "pentagon", "triangle-down", "x"]
 
-        # Compute global smash range across all clubs for consistent colorscale
-        all_smash = path_plot_df["smash"].dropna()
-        smash_min = all_smash.min() if not all_smash.empty else 1.0
-        smash_max = all_smash.max() if not all_smash.empty else 1.5
+        # Color by angle of attack
+        all_aoa = path_plot_df["angle_of_attack_deg"].dropna()
+        aoa_min = all_aoa.min() if not all_aoa.empty else -10.0
+        aoa_max = all_aoa.max() if not all_aoa.empty else 5.0
 
         for i, club in enumerate(path_clubs):
             cdf = path_plot_df[path_plot_df["club"] == club].copy()
@@ -516,12 +519,12 @@ with _col_path:
                 marker=dict(
                     size=10,
                     symbol=shape,
-                    color=cdf["smash"],
+                    color=cdf["angle_of_attack_deg"],
                     colorscale="RdYlGn",
-                    cmin=smash_min,
-                    cmax=smash_max,
+                    cmin=aoa_min,
+                    cmax=aoa_max,
                     showscale=(i == 0),
-                    colorbar=dict(title="Smash Factor", x=1.02, len=0.5, yanchor="top", y=1) if i == 0 else None,
+                    colorbar=dict(title="Angle of Attack (°)", x=1.02, len=0.5, yanchor="top", y=1) if i == 0 else None,
                     line=dict(width=1, color="white"),
                     opacity=0.85,
                 ),
