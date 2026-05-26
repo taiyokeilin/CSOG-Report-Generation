@@ -326,21 +326,23 @@ else:
                        annotation_position="right",
                        annotation_font=dict(color="#333333", size=12))
 
-    # Proximity circles
+    # Proximity circles + 95% ellipse
     if show_proximity and intended_carry > 0:
         import sys, os
         sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
         from data.tour_targets import get_tour_target, get_level_multipliers
         import numpy as np
+        import math
+        from scipy import stats
 
         prox_ft, _, _ = get_tour_target(intended_carry)
         _, prox_mult = get_level_multipliers(disp_level)
         if prox_ft is not None and prox_mult is not None:
             target_prox_ft = prox_ft * prox_mult
             target_prox_yd = target_prox_ft / 3
-
             theta = np.linspace(0, 2 * np.pi, 200)
-            # Target proximity circle (centered on intended carry)
+
+            # 1. Target circle — centered on intended carry (blue dashed)
             fig3.add_trace(go.Scatter(
                 x=target_prox_yd * np.cos(theta),
                 y=intended_carry + target_prox_yd * np.sin(theta),
@@ -349,23 +351,47 @@ else:
                 hoverinfo="skip",
             ))
 
-            # Actual average proximity circle (use first selected club)
+            # Get first selected club data
             first_club_data = disp_plot_df[disp_plot_df["club"] == disp_clubs[0]] if disp_clubs else disp_plot_df
-            if not first_club_data.empty and first_club_data[["carry_yd","offline_yd"]].notna().all(axis=1).any():
-                import math
-                proximities = [
-                    math.sqrt((r["offline_yd"]**2) + ((intended_carry - r["carry_yd"])**2))
-                    for _, r in first_club_data.iterrows()
-                    if pd.notna(r["offline_yd"]) and pd.notna(r["carry_yd"])
-                ]
-                if proximities:
-                    avg_prox_yd = sum(proximities) / len(proximities)
-                    avg_prox_ft = avg_prox_yd * 3
+            valid = first_club_data[["carry_yd", "offline_yd"]].dropna()
+
+            if not valid.empty:
+                carry_vals   = valid["carry_yd"].values
+                offline_vals = valid["offline_yd"].values
+                avg_carry    = carry_vals.mean()
+                avg_offline  = offline_vals.mean()
+
+                # 2. Actual avg proximity circle — centered on intended carry (orange dotted)
+                proximities = [math.sqrt(o**2 + (intended_carry - c)**2)
+                               for c, o in zip(carry_vals, offline_vals)]
+                avg_prox_yd = sum(proximities) / len(proximities)
+                avg_prox_ft = avg_prox_yd * 3
+                fig3.add_trace(go.Scatter(
+                    x=avg_prox_yd * np.cos(theta),
+                    y=intended_carry + avg_prox_yd * np.sin(theta),
+                    mode="lines", name=f"Actual avg ({avg_prox_ft:.1f}ft)",
+                    line=dict(color="#E07B39", width=2, dash="dot"),
+                    hoverinfo="skip",
+                ))
+
+                # 3. 95% ellipse — centered on actual average (green solid)
+                if len(valid) >= 3:
+                    cov = np.cov(offline_vals, carry_vals)
+                    chi2_95 = stats.chi2.ppf(0.95, df=2)
+                    eigvals, eigvecs = np.linalg.eigh(cov)
+                    order = np.argsort(eigvals)[::-1]
+                    eigvals, eigvecs = eigvals[order], eigvecs[:, order]
+                    angle = np.arctan2(eigvecs[1, 0], eigvecs[0, 0])
+                    a = np.sqrt(chi2_95 * max(eigvals[0], 0))
+                    b = np.sqrt(chi2_95 * max(eigvals[1], 0))
+                    ellipse_x = (a * np.cos(theta) * np.cos(angle)
+                                 - b * np.sin(theta) * np.sin(angle) + avg_offline)
+                    ellipse_y = (a * np.cos(theta) * np.sin(angle)
+                                 + b * np.sin(theta) * np.cos(angle) + avg_carry)
                     fig3.add_trace(go.Scatter(
-                        x=avg_prox_yd * np.cos(theta),
-                        y=intended_carry + avg_prox_yd * np.sin(theta),
-                        mode="lines", name=f"Actual avg ({avg_prox_ft:.1f}ft)",
-                        line=dict(color="#E07B39", width=2, dash="dot"),
+                        x=ellipse_x, y=ellipse_y,
+                        mode="lines", name="95% ellipse",
+                        line=dict(color="#2CA02C", width=2),
                         hoverinfo="skip",
                     ))
 
