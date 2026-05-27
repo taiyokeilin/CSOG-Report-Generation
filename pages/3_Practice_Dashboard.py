@@ -273,7 +273,7 @@ else:
 
     # Symmetric x-axis around 0
     max_offline = disp_plot_df["offline_yd"].abs().max()
-    x_range = [-max_offline * 1.2 - 0.5, max_offline * 1.2 + 0.5]
+    x_range = [-max_offline * 1.2 - 1, max_offline * 1.2 + 1]
 
     has_prox = intended_carry > 0 and "prox_str" in disp_plot_df.columns
 
