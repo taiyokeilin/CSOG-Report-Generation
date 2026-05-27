@@ -234,7 +234,8 @@ else:
 
     p3d1, p3d2, p3d3 = st.columns([1, 1, 1])
     with p3d1:
-        show_ellipse = st.checkbox("Show 95% ellipse (per club)", value=False, key="disp_ellipse")
+        show_ellipse = st.checkbox("Show each club's dispersion", value=False, key="disp_ellipse")
+        hide_shots   = st.checkbox("Remove individual shots", value=False, key="disp_hide_shots")
     with p3d2:
         single_club = len(disp_clubs) == 1
         show_proximity = st.checkbox(
@@ -305,45 +306,45 @@ else:
         dark_color = _darken_hex(base_color, 0.82)
 
         # Individual points
-        if color_by_date:
-            # When coloring by date, use date as color — fall back to px.scatter per club
-            dates = sorted(normal_data["date_str"].unique())
-            date_colors = px.colors.qualitative.Pastel
-            for j, d in enumerate(dates):
-                dd = normal_data[normal_data["date_str"] == d]
+        if not hide_shots:
+            if color_by_date:
+                dates = sorted(normal_data["date_str"].unique())
+                date_colors = px.colors.qualitative.Pastel
+                for j, d in enumerate(dates):
+                    dd = normal_data[normal_data["date_str"] == d]
+                    fig3.add_trace(go.Scatter(
+                        x=dd["offline_yd"], y=dd["carry_yd"], mode="markers",
+                        name=d, showlegend=False,
+                        text=dd["hover_text"],
+                        hovertemplate="%{text}<extra></extra>",
+                        marker=dict(size=8, color=date_colors[j % len(date_colors)],
+                                    opacity=0.75, line=dict(width=1, color="white")),
+                    ))
+            else:
                 fig3.add_trace(go.Scatter(
-                    x=dd["offline_yd"], y=dd["carry_yd"], mode="markers",
-                    name=d,
-                    text=dd["hover_text"],
+                    x=normal_data["offline_yd"], y=normal_data["carry_yd"], mode="markers",
+                    name=club, showlegend=False,
+                    text=normal_data["hover_text"],
                     hovertemplate="%{text}<extra></extra>",
-                    marker=dict(size=8, color=date_colors[j % len(date_colors)],
-                                opacity=0.75, line=dict(width=1, color="white")),
+                    marker=dict(size=8, color=base_color, opacity=0.75,
+                                line=dict(width=1, color="white")),
                 ))
-        else:
-            fig3.add_trace(go.Scatter(
-                x=normal_data["offline_yd"], y=normal_data["carry_yd"], mode="markers",
-                name=club,
-                text=normal_data["hover_text"],
-                hovertemplate="%{text}<extra></extra>",
-                marker=dict(size=8, color=base_color, opacity=0.75,
-                            line=dict(width=1, color="white")),
-            ))
 
-        # Outlier overlay
-        if not exclude_outliers and not outlier_data.empty:
-            fig3.add_trace(go.Scatter(
-                x=outlier_data["offline_yd"], y=outlier_data["carry_yd"],
-                mode="markers", name=f"{club} outlier",
-                marker=dict(size=10, color="red", symbol="x", line=dict(width=2, color="darkred")),
-                hovertemplate="<b>Outlier</b><br>Offline: %{x:.1f} yd<br>Carry: %{y:.1f} yd<extra></extra>",
-            ))
+            # Outlier overlay
+            if not exclude_outliers and not outlier_data.empty:
+                fig3.add_trace(go.Scatter(
+                    x=outlier_data["offline_yd"], y=outlier_data["carry_yd"],
+                    mode="markers", name=f"{club} outlier", showlegend=False,
+                    marker=dict(size=10, color="red", symbol="x", line=dict(width=2, color="darkred")),
+                    hovertemplate="<b>Outlier</b><br>Offline: %{x:.1f} yd<br>Carry: %{y:.1f} yd<extra></extra>",
+                ))
 
-        # Average dot — same hue, slightly darker, black outline, slightly bigger
+        # Average dot — in legend with just club name
         avg_carry   = club_data["carry_yd"].mean()
         avg_offline = club_data["offline_yd"].mean()
         fig3.add_trace(go.Scatter(
             x=[avg_offline], y=[avg_carry], mode="markers",
-            name=f"{club} avg",
+            name=club, showlegend=True,
             marker=dict(size=14, color=dark_color, opacity=1.0, symbol="circle",
                         line=dict(width=2, color="black")),
             hovertemplate=f"<b>{club} avg</b><br>Offline: {avg_offline:.1f} yd<br>Carry: {avg_carry:.1f} yd<extra></extra>",
@@ -387,7 +388,7 @@ else:
             ellipse_color = _darken_hex(BASE_COLORS[i % len(BASE_COLORS)], 0.7)
             fig3.add_trace(go.Scatter(
                 x=ellipse_x, y=ellipse_y,
-                mode="lines", name=f"{club} 95% ellipse",
+                mode="lines", name=f"{club} 95% ellipse", showlegend=False,
                 line=dict(color=ellipse_color, width=2),
                 hoverinfo="skip",
             ))
