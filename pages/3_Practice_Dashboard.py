@@ -162,7 +162,7 @@ st.caption(f"**{len(df):,} shots** · {df['session_date'].dt.date.nunique()} ses
 
 
 # ── PLOT 1: Box Plot ──────────────────────────────────────────────────────────
-st.markdown('<p class="section-header">📊 Metric by Date</p>', unsafe_allow_html=True)
+st.markdown('<p class="section-header">📦 Metric by Date</p>', unsafe_allow_html=True)
 
 p1c1, p1c2, p1c3 = st.columns([2, 2, 1])
 with p1c1:
@@ -210,6 +210,13 @@ else:
 
 
 
+
+def _darken_hex(hex_color: str, factor: float = 0.85) -> str:
+    """Return a slightly darker version of a hex color."""
+    hex_color = hex_color.lstrip("#")
+    r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
+    return "#{:02x}{:02x}{:02x}".format(int(r*factor), int(g*factor), int(b*factor))
+
 # ── PLOT 2: Carry Dispersion ──────────────────────────────────────────────────
 st.markdown('<p class="section-header">📍 Carry Dispersion</p>', unsafe_allow_html=True)
 
@@ -218,19 +225,33 @@ disp_df = df[["club", "carry_yd", "offline_yd", "session_date"]].dropna()
 if disp_df.empty:
     st.info("No carry/offline data available.")
 else:
-    p3c1, p3c2, p3c3, p3c4, p3c5 = st.columns([2, 1, 1, 1, 1])
+    p3c1, p3c2 = st.columns([2, 1])
     with p3c1:
         disp_clubs = st.multiselect("Club(s)", sorted(disp_df["club"].unique()),
                                     default=[sorted(disp_df["club"].unique())[0]], key="disp_club")
     with p3c2:
         color_by_date = st.checkbox("Color by date", value=False, key="disp_color")
-    with p3c3:
-        intended_carry = st.number_input("Intended carry (yd)", min_value=0, max_value=400,
-                                         value=0, step=5, key="disp_target")
-    with p3c4:
-        disp_level = st.slider("Level", 1, 12, value=5, key="disp_level")
-    with p3c5:
-        show_proximity = st.checkbox("Show proximity circle", value=False, key="disp_prox")
+
+    p3d1, p3d2, p3d3 = st.columns([1, 1, 1])
+    with p3d1:
+        show_ellipse = st.checkbox("Show 95% ellipse (per club)", value=False, key="disp_ellipse")
+    with p3d2:
+        single_club = len(disp_clubs) == 1
+        show_proximity = st.checkbox(
+            "Show proximity circles" + ("" if single_club else " (single club only)"),
+            value=False, key="disp_prox",
+            disabled=not single_club,
+        )
+        if not single_club:
+            st.caption("Select one club to enable proximity circles.")
+    with p3d3:
+        if show_proximity or show_ellipse:
+            intended_carry = st.number_input("Intended carry (yd)", min_value=0, max_value=400,
+                                             value=0, step=5, key="disp_target")
+            disp_level = st.slider("Level", 1, 12, value=5, key="disp_level")
+        else:
+            intended_carry = 0
+            disp_level = 5
 
     disp_plot_df = disp_df[disp_df["club"].isin(disp_clubs)].copy()
     disp_plot_df["date_str"] = disp_plot_df["session_date"].dt.strftime("%b %d, %Y")
@@ -256,7 +277,7 @@ else:
 
     # Symmetric x-axis around 0
     max_offline = disp_plot_df["offline_yd"].abs().max()
-    x_range = [-max_offline * 1.2 - 1, max_offline * 1.2 + 1]
+    x_range = [-max_offline * 1.2 - 0.5, max_offline * 1.2 + 0.5]
 
     has_prox = intended_carry > 0 and "prox_str" in disp_plot_df.columns
 
@@ -270,52 +291,61 @@ else:
 
     disp_plot_df["hover_text"] = disp_plot_df.apply(_build_disp_hover, axis=1)
 
-    if color_by_date:
-        fig3 = px.scatter(
-            disp_plot_df, x="offline_yd", y="carry_yd", color="date_str",
-            symbol="club" if len(disp_clubs) > 1 else None,
-            labels={"offline_yd": "Offline (yd)", "carry_yd": "Carry (yd)", "date_str": "Date", "club": "Club"},
-            title=f"Carry Dispersion — {', '.join(disp_clubs)}",
-        )
-    else:
-        fig3 = px.scatter(
-            disp_plot_df, x="offline_yd", y="carry_yd",
-            color="club" if len(disp_clubs) > 1 else None,
-            labels={"offline_yd": "Offline (yd)", "carry_yd": "Carry (yd)", "club": "Club"},
-            title=f"Carry Dispersion — {', '.join(disp_clubs)}",
-        )
-        if len(disp_clubs) == 1:
-            fig3.update_traces(marker=dict(size=8, color="#2E75B6", opacity=0.7,
-                                           line=dict(width=1, color="white")))
+    # Build figure manually for coordinated per-club colors
+    BASE_COLORS = px.colors.qualitative.Plotly
+    fig3 = go.Figure()
+    fig3.update_layout(title=f"Carry Dispersion — {', '.join(disp_clubs)}")
 
-    fig3.update_traces(
-        text=disp_plot_df["hover_text"],
-        hovertemplate="%{text}<extra></extra>",
-    )
+    for i, club in enumerate(disp_clubs):
+        club_data = disp_plot_df[disp_plot_df["club"] == club]
+        normal_data  = club_data[~club_data["_is_outlier"]] if "_is_outlier" in club_data.columns else club_data
+        outlier_data = club_data[club_data["_is_outlier"]]  if "_is_outlier" in club_data.columns else club_data.iloc[0:0]
 
-    # Outlier overlay
-    if not exclude_outliers and "_is_outlier" in disp_plot_df.columns:
-        disp_out = disp_plot_df[disp_plot_df["_is_outlier"]]
-        if not disp_out.empty:
+        base_color = BASE_COLORS[i % len(BASE_COLORS)]
+        dark_color = _darken_hex(base_color, 0.82)
+
+        # Individual points
+        if color_by_date:
+            # When coloring by date, use date as color — fall back to px.scatter per club
+            dates = sorted(normal_data["date_str"].unique())
+            date_colors = px.colors.qualitative.Pastel
+            for j, d in enumerate(dates):
+                dd = normal_data[normal_data["date_str"] == d]
+                fig3.add_trace(go.Scatter(
+                    x=dd["offline_yd"], y=dd["carry_yd"], mode="markers",
+                    name=d,
+                    text=dd["hover_text"],
+                    hovertemplate="%{text}<extra></extra>",
+                    marker=dict(size=8, color=date_colors[j % len(date_colors)],
+                                opacity=0.75, line=dict(width=1, color="white")),
+                ))
+        else:
             fig3.add_trace(go.Scatter(
-                x=disp_out["offline_yd"], y=disp_out["carry_yd"],
-                mode="markers", name="Outlier",
+                x=normal_data["offline_yd"], y=normal_data["carry_yd"], mode="markers",
+                name=club,
+                text=normal_data["hover_text"],
+                hovertemplate="%{text}<extra></extra>",
+                marker=dict(size=8, color=base_color, opacity=0.75,
+                            line=dict(width=1, color="white")),
+            ))
+
+        # Outlier overlay
+        if not exclude_outliers and not outlier_data.empty:
+            fig3.add_trace(go.Scatter(
+                x=outlier_data["offline_yd"], y=outlier_data["carry_yd"],
+                mode="markers", name=f"{club} outlier",
                 marker=dict(size=10, color="red", symbol="x", line=dict(width=2, color="darkred")),
                 hovertemplate="<b>Outlier</b><br>Offline: %{x:.1f} yd<br>Carry: %{y:.1f} yd<extra></extra>",
             ))
 
-    # Per-club averages
-    colors = px.colors.qualitative.Plotly
-    for i, club in enumerate(disp_clubs):
-        club_data = disp_plot_df[disp_plot_df["club"] == club]
+        # Average dot — same hue, slightly darker, black outline, slightly bigger
         avg_carry   = club_data["carry_yd"].mean()
         avg_offline = club_data["offline_yd"].mean()
-        color = colors[i % len(colors)] if len(disp_clubs) > 1 else "#2E75B6"
         fig3.add_trace(go.Scatter(
             x=[avg_offline], y=[avg_carry], mode="markers",
             name=f"{club} avg",
-            marker=dict(size=16, color=color, symbol="circle",
-                        line=dict(width=2, color="white")),
+            marker=dict(size=14, color=dark_color, opacity=1.0, symbol="circle",
+                        line=dict(width=2, color="black")),
             hovertemplate=f"<b>{club} avg</b><br>Offline: {avg_offline:.1f} yd<br>Carry: {avg_carry:.1f} yd<extra></extra>",
         ))
 
@@ -326,14 +356,47 @@ else:
                        annotation_position="right",
                        annotation_font=dict(color="#333333", size=12))
 
-    # Proximity circles + 95% ellipse
-    if show_proximity and intended_carry > 0:
+    import numpy as np
+    import math
+    from scipy import stats
+
+    # 95% ellipse — one per club
+    if show_ellipse:
+        theta = np.linspace(0, 2 * np.pi, 200)
+        for i, club in enumerate(disp_clubs):
+            club_data = disp_plot_df[disp_plot_df["club"] == club]
+            valid = club_data[["carry_yd", "offline_yd"]].dropna()
+            if len(valid) < 3:
+                continue
+            carry_vals   = valid["carry_yd"].values
+            offline_vals = valid["offline_yd"].values
+            avg_carry_e  = carry_vals.mean()
+            avg_offline_e = offline_vals.mean()
+            cov = np.cov(offline_vals, carry_vals)
+            chi2_95 = stats.chi2.ppf(0.95, df=2)
+            eigvals, eigvecs = np.linalg.eigh(cov)
+            order = np.argsort(eigvals)[::-1]
+            eigvals, eigvecs = eigvals[order], eigvecs[:, order]
+            angle = np.arctan2(eigvecs[1, 0], eigvecs[0, 0])
+            a = np.sqrt(chi2_95 * max(eigvals[0], 0))
+            b = np.sqrt(chi2_95 * max(eigvals[1], 0))
+            ellipse_x = (a * np.cos(theta) * np.cos(angle)
+                         - b * np.sin(theta) * np.sin(angle) + avg_offline_e)
+            ellipse_y = (a * np.cos(theta) * np.sin(angle)
+                         + b * np.sin(theta) * np.cos(angle) + avg_carry_e)
+            ellipse_color = _darken_hex(BASE_COLORS[i % len(BASE_COLORS)], 0.7)
+            fig3.add_trace(go.Scatter(
+                x=ellipse_x, y=ellipse_y,
+                mode="lines", name=f"{club} 95% ellipse",
+                line=dict(color=ellipse_color, width=2),
+                hoverinfo="skip",
+            ))
+
+    # Proximity circles — single club only
+    if show_proximity and single_club and intended_carry > 0:
         import sys, os
         sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
         from data.tour_targets import get_tour_target, get_level_multipliers
-        import numpy as np
-        import math
-        from scipy import stats
 
         prox_ft, _, _ = get_tour_target(intended_carry)
         _, prox_mult = get_level_multipliers(disp_level)
@@ -342,7 +405,7 @@ else:
             target_prox_yd = target_prox_ft / 3
             theta = np.linspace(0, 2 * np.pi, 200)
 
-            # 1. Target circle — centered on intended carry (blue dashed)
+            # Target circle — centered on intended carry (blue dashed)
             fig3.add_trace(go.Scatter(
                 x=target_prox_yd * np.cos(theta),
                 y=intended_carry + target_prox_yd * np.sin(theta),
@@ -351,21 +414,15 @@ else:
                 hoverinfo="skip",
             ))
 
-            # Get first selected club data
-            first_club_data = disp_plot_df[disp_plot_df["club"] == disp_clubs[0]] if disp_clubs else disp_plot_df
-            valid = first_club_data[["carry_yd", "offline_yd"]].dropna()
-
+            valid = disp_plot_df[disp_plot_df["club"] == disp_clubs[0]][["carry_yd","offline_yd"]].dropna()
             if not valid.empty:
                 carry_vals   = valid["carry_yd"].values
                 offline_vals = valid["offline_yd"].values
-                avg_carry    = carry_vals.mean()
-                avg_offline  = offline_vals.mean()
-
-                # 2. Actual avg proximity circle — centered on intended carry (orange dotted)
-                proximities = [math.sqrt(o**2 + (intended_carry - c)**2)
-                               for c, o in zip(carry_vals, offline_vals)]
-                avg_prox_yd = sum(proximities) / len(proximities)
-                avg_prox_ft = avg_prox_yd * 3
+                proximities  = [math.sqrt(o**2 + (intended_carry - c)**2)
+                                for c, o in zip(carry_vals, offline_vals)]
+                avg_prox_yd  = sum(proximities) / len(proximities)
+                avg_prox_ft  = avg_prox_yd * 3
+                # Actual avg proximity circle — centered on intended carry (orange dotted)
                 fig3.add_trace(go.Scatter(
                     x=avg_prox_yd * np.cos(theta),
                     y=intended_carry + avg_prox_yd * np.sin(theta),
@@ -373,27 +430,6 @@ else:
                     line=dict(color="#E07B39", width=2, dash="dot"),
                     hoverinfo="skip",
                 ))
-
-                # 3. 95% ellipse — centered on actual average (green solid)
-                if len(valid) >= 3:
-                    cov = np.cov(offline_vals, carry_vals)
-                    chi2_95 = stats.chi2.ppf(0.95, df=2)
-                    eigvals, eigvecs = np.linalg.eigh(cov)
-                    order = np.argsort(eigvals)[::-1]
-                    eigvals, eigvecs = eigvals[order], eigvecs[:, order]
-                    angle = np.arctan2(eigvecs[1, 0], eigvecs[0, 0])
-                    a = np.sqrt(chi2_95 * max(eigvals[0], 0))
-                    b = np.sqrt(chi2_95 * max(eigvals[1], 0))
-                    ellipse_x = (a * np.cos(theta) * np.cos(angle)
-                                 - b * np.sin(theta) * np.sin(angle) + avg_offline)
-                    ellipse_y = (a * np.cos(theta) * np.sin(angle)
-                                 + b * np.sin(theta) * np.cos(angle) + avg_carry)
-                    fig3.add_trace(go.Scatter(
-                        x=ellipse_x, y=ellipse_y,
-                        mode="lines", name="95% ellipse",
-                        line=dict(color="#2CA02C", width=2),
-                        hoverinfo="skip",
-                    ))
 
     # Always center x at 0
     fig3.add_vline(x=0, line_color="#AAAAAA", line_width=1.5)
