@@ -16,7 +16,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown('<p class="main-header">⛳ Practice Dashboard</p>', unsafe_allow_html=True)
-st.markdown('<p class="sub-header">Select a player and date range to view their development</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-header">Select a player and date range (from the menu on the left) to view their development</p>', unsafe_allow_html=True)
 
 
 # ── Supabase connection ───────────────────────────────────────────────────────
