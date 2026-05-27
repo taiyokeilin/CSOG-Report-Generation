@@ -103,9 +103,7 @@ METRICS = {
 }
 
 
-# ── FILTERS ───────────────────────────────────────────────────────────────────
-st.markdown('<p class="section-header">Filters</p>', unsafe_allow_html=True)
-
+# ── SIDEBAR FILTERS ──────────────────────────────────────────────────────────
 players = load_players()
 if not players:
     st.warning("No players found in database.")
@@ -113,51 +111,48 @@ if not players:
 
 player_options = {f"{p['first_name']} {p['last_name']}": p["player_id"] for p in players}
 
-f1, f2, f3 = st.columns([2, 2, 2])
-with f1:
+with st.sidebar:
+    st.markdown("### Filters")
     selected_player_name = st.selectbox("Player", list(player_options.keys()))
     selected_player_id   = player_options[selected_player_name]
-with f2:
     date_from = st.date_input("From", value=date.today() - timedelta(days=365))
-with f3:
-    date_to = st.date_input("To", value=date.today())
+    date_to   = st.date_input("To",   value=date.today())
 
-df = load_shots(selected_player_id, str(date_from), str(date_to))
+    df = load_shots(selected_player_id, str(date_from), str(date_to))
 
-if df.empty:
-    st.info("No shots found for this player in the selected date range.")
-    st.stop()
+    if df.empty:
+        st.info("No shots found for this player in the selected date range.")
+        st.stop()
 
-all_clubs = sorted(df["club"].dropna().unique().tolist())
-selected_clubs = st.multiselect("Clubs", all_clubs, default=all_clubs)
-df = df[df["club"].isin(selected_clubs)]
+    all_clubs = sorted(df["club"].dropna().unique().tolist())
+    selected_clubs = st.multiselect("Clubs", all_clubs, default=all_clubs)
+    df = df[df["club"].isin(selected_clubs)]
 
-if df.empty:
-    st.info("No shots for the selected clubs.")
-    st.stop()
+    if df.empty:
+        st.info("No shots for the selected clubs.")
+        st.stop()
 
-# ── Outlier detection ─────────────────────────────────────────────────────────
-# Compute per-club per-date median ball speed, flag shots ±15% outside it
-if "ball_speed_mph" in df.columns and df["ball_speed_mph"].notna().any():
-    medians = df.groupby(["club", df["session_date"].dt.date])["ball_speed_mph"].transform("median")
-    df["_is_outlier"] = (
-        df["ball_speed_mph"].notna() &
-        ((df["ball_speed_mph"] < medians * 0.85) | (df["ball_speed_mph"] > medians * 1.15))
+    # Outlier detection
+    if "ball_speed_mph" in df.columns and df["ball_speed_mph"].notna().any():
+        medians = df.groupby(["club", df["session_date"].dt.date])["ball_speed_mph"].transform("median")
+        df["_is_outlier"] = (
+            df["ball_speed_mph"].notna() &
+            ((df["ball_speed_mph"] < medians * 0.85) | (df["ball_speed_mph"] > medians * 1.15))
+        )
+    else:
+        df["_is_outlier"] = False
+
+    n_outliers = df["_is_outlier"].sum()
+    exclude_outliers = st.checkbox(
+        f"Exclude outliers ({n_outliers} shots ±15% from median ball speed)",
+        value=False,
+        key="exclude_outliers",
     )
-else:
-    df["_is_outlier"] = False
+    if exclude_outliers:
+        df = df[~df["_is_outlier"]].copy()
 
-n_outliers = df["_is_outlier"].sum()
-exclude_outliers = st.checkbox(
-    f"Exclude outliers ({n_outliers} shots where ball speed is >15% from club/date median)",
-    value=False,
-    key="exclude_outliers",
-)
-if exclude_outliers:
-    df = df[~df["_is_outlier"]].copy()
-
-st.caption(f"**{len(df):,} shots** · {df['session_date'].dt.date.nunique()} sessions · {df['club'].nunique()} clubs" +
-           (f" · {n_outliers} outliers excluded" if exclude_outliers else ""))
+    st.caption(f"**{len(df):,} shots** · {df['session_date'].dt.date.nunique()} sessions · {df['club'].nunique()} clubs" +
+               (f" · {n_outliers} excluded" if exclude_outliers else ""))
 
 
 
