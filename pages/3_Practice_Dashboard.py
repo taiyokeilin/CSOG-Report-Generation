@@ -542,20 +542,20 @@ with _col_path:
 
         path_plot_df["hover"] = path_plot_df.apply(lambda r: (
             f"<b>{r['club']}</b><br>"
-            f"Club Speed: {fmt(r['club_speed_mph'])} mph<br>"
+            f"Club Speed: {fmt(r['club_speed_mph'], 0)} mph<br>"
             f"Angle of Attack: {fmt(r['angle_of_attack_deg'])}°<br>"
             f"Club Path: {fmt(r['club_path_deg'])}°<br>"
             f"Face Angle: {fmt(r['face_angle_deg'])}°<br>"
-            f"Dynamic Loft: {fmt(r['dynamic_loft_deg'])}°<br>"
-            f"Impact H: {fmt(r['face_impact_horizontal_mm'])} mm<br>"
-            f"Impact V: {fmt(r['face_impact_vertical_mm'])} mm<br>"
-            f"Ball Speed: {fmt(r['ball_speed_mph'])} mph<br>"
-            f"Smash Factor: {fmt(r['smash'], 3)}<br>"
-            f"Launch Angle: {fmt(r['launch_angle_deg'])}°<br>"
+            f"Dynamic Loft: {fmt(r['dynamic_loft_deg'], 0)}°<br>"
+            f"Impact H: {fmt(r['face_impact_horizontal_mm'], 0)} mm<br>"
+            f"Impact V: {fmt(r['face_impact_vertical_mm'], 0)} mm<br>"
+            f"Ball Speed: {fmt(r['ball_speed_mph'], 0)} mph<br>"
+            f"Smash Factor: {fmt(r['smash'], 2)}<br>"
+            f"Launch Angle: {fmt(r['launch_angle_deg'], 0)}°<br>"
             f"Spin Rate: {fmt(r['total_spin_rpm'], 0)} rpm<br>"
-            f"Carry: {fmt(r['carry_yd'])} yd<br>"
-            f"Offline: {fmt(r['offline_yd'])} yd<br>"
-            f"Total: {fmt(r['total_yd'])} yd"
+            f"Carry: {fmt(r['carry_yd'], 0)} yd<br>"
+            f"Offline: {fmt(r['offline_yd'], 0)} yd<br>"
+            f"Total: {fmt(r['total_yd'], 0)} yd"
         ), axis=1)
 
         fig4 = go.Figure()
