@@ -152,7 +152,7 @@ if sb:
         players_res = sb.table("players").select("player_id, first_name, last_name").execute()
         player_list = players_res.data or []
         player_list_sorted = sorted(player_list, key=lambda p: p["last_name"].lower())
-        player_options = {f"{p['first_name']} {p['last_name']}": p["player_id"] for p in player_list_sorted}
+            player_options = {f"{p['first_name']} {p['last_name']}": p["player_id"] for p in player_list_sorted}
     except Exception:
         player_options = {}
 
@@ -193,7 +193,7 @@ if sb:
         # Coach lookup/create
         try:
             coaches_res = sb.table("coaches").select("coach_id, first_name, last_name").execute()
-            coach_list  = coaches_res.data or []
+            coach_list  = sorted(coaches_res.data or [], key=lambda c: c["last_name"].lower())
             coach_options = {f"{c['first_name']} {c['last_name']}": c["coach_id"] for c in coach_list}
         except Exception:
             coach_options = {}
