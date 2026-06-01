@@ -313,7 +313,7 @@ else:
                         name=d, showlegend=False,
                         text=dd["hover_text"],
                         hovertemplate="%{text}<extra></extra>",
-                        marker=dict(size=8, color=date_colors[j % len(date_colors)],
+                        marker=dict(size=10, color=date_colors[j % len(date_colors)],
                                     opacity=0.75, line=dict(width=1, color="white")),
                     ))
             else:
@@ -322,7 +322,7 @@ else:
                     name=club, showlegend=False,
                     text=normal_data["hover_text"],
                     hovertemplate="%{text}<extra></extra>",
-                    marker=dict(size=8, color=base_color, opacity=0.75,
+                    marker=dict(size=10, color=base_color, opacity=0.75,
                                 line=dict(width=1, color="white")),
                 ))
 
