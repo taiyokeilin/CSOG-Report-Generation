@@ -637,8 +637,8 @@ with _col_path:
             height=550,
             legend=dict(
                 title="Club",
-                x=1.15,
-                y=0.3,
+                x=1.02,
+                y=0.5,
                 yanchor="top",
             ),
             coloraxis_colorbar=dict(x=1.02, len=0.5, yanchor="top", y=1),
