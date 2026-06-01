@@ -612,7 +612,7 @@ with _col_path:
                             colorbar=dict(title="Angle of Attack (°)",
                                           x=1.02, y=1, len=0.5, yanchor="top",
                                           titlefont=dict(size=13)) if i == 0 else None,
-                            line=dict(width=1, color="white"), opacity=0.85),
+                            line=dict(width=1, color="white"), opacity=0.85)
             ))
 
         if not exclude_outliers and "_is_outlier" in path_plot_df.columns:
