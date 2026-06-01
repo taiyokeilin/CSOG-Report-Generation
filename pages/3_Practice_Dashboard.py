@@ -642,7 +642,7 @@ with _col_path:
                 x=1.02,
                 y=0.5,
                 yanchor="top",
-                titlefont=dict(size=13)
+                title=dict(size=13)
             ),
             coloraxis_colorbar=dict(x=1.02, len=0.5, yanchor="top", y=1),
         )
