@@ -490,7 +490,7 @@ with _col_impact:
                 x=club_df["face_impact_horizontal_mm"],
                 y=club_df["face_impact_vertical_mm"],
                 mode="markers", name=club, showlegend=False,
-                marker=dict(size=12, color=color, opacity=0.6, line=dict(width=1, color="white")),
+                marker=dict(size=11, color=color, opacity=0.5, line=dict(width=1, color="white")),
                 hovertemplate=f"<b>{club}</b><br>Horizontal: %{{x:.1f}} mm<br>Vertical: %{{y:.1f}} mm<extra></extra>",
             ))
             # Average dot — in legend with club name, avg size/color
@@ -498,7 +498,7 @@ with _col_impact:
                 x=[avg_h], y=[avg_v],
                 mode="markers", name=club, showlegend=True,
                 marker=dict(size=18, color=color, symbol="circle",
-                            line=dict(width=2, color="white")),
+                            line=dict(width=2, color="gray")),
                 hovertemplate=f"<b>{club} avg</b><br>Horizontal: {avg_h:.1f} mm<br>Vertical: {avg_v:.1f} mm<extra></extra>",
             ))
 
