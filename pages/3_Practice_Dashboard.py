@@ -498,7 +498,7 @@ with _col_impact:
                 x=[avg_h], y=[avg_v],
                 mode="markers", name=club, showlegend=True,
                 marker=dict(size=18, color=color, symbol="circle",
-                            line=dict(width=2, color="gray")),
+                            line=dict(width=2, color="black")),
                 hovertemplate=f"<b>{club} avg</b><br>Horizontal: {avg_h:.1f} mm<br>Vertical: {avg_v:.1f} mm<extra></extra>",
             ))
 
