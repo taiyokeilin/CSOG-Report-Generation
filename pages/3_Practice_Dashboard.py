@@ -520,47 +520,36 @@ with _col_path:
     if not has_path:
         st.info("No club path data available.")
     elif not has_face:
-        # ── Density plot: club path distribution ─────────────────────────────
-        st.markdown("**Club Path Distribution**")
-        import numpy as np
-        from scipy.stats import gaussian_kde
-
-        density_df = df[["club", "club_path_deg", "_is_outlier"]].dropna(subset=["club_path_deg"])
+        # ── Histogram: club path distribution (bin=1°) ───────────────────────
+        density_df = df[["club", "club_path_deg"]].dropna(subset=["club_path_deg"])
         density_plot_df = density_df[density_df["club"].isin(impact_clubs)]
         fig4 = go.Figure()
         BASE_COLORS_D = px.colors.qualitative.Plotly
 
         for i, club in enumerate(impact_clubs):
             cdf = density_plot_df[density_plot_df["club"] == club]["club_path_deg"].dropna()
-            if len(cdf) < 3:
+            if cdf.empty:
                 continue
             color = BASE_COLORS_D[i % len(BASE_COLORS_D)]
-            kde = gaussian_kde(cdf, bw_method="silverman")
-            x_range_kde = np.linspace(cdf.min() - 2, cdf.max() + 2, 300)
-            y_kde = kde(x_range_kde)
-            # Build fill color with transparency
-            import re
-            rgb_match = re.match(r"rgb\((\d+),\s*(\d+),\s*(\d+)\)", color)
-            fill_color = f"rgba({rgb_match.group(1)},{rgb_match.group(2)},{rgb_match.group(3)},0.15)" if rgb_match else color
-            fig4.add_trace(go.Scatter(
-                x=x_range_kde, y=y_kde,
-                mode="lines", name=club,
-                line=dict(color=color, width=2),
-                fill="tozeroy", fillcolor=fill_color,
+            fig4.add_trace(go.Histogram(
+                x=cdf, name=club,
+                xbins=dict(start=cdf.min() - 0.5, end=cdf.max() + 0.5, size=1),
+                marker_color=color, opacity=0.6,
             ))
-            fig4.add_vline(x=float(cdf.mean()), line_color=color, line_width=1.5,
+            fig4.add_vline(x=float(cdf.mean()), line_color=color, line_width=2,
                            line_dash="dash",
-                           annotation_text=f"{club}: {cdf.mean():.1f}°",
+                           annotation_text=f"{cdf.mean():.1f}°",
                            annotation_position="top")
 
-        fig4.add_vline(x=0, line_color="#AAAAAA", line_width=1)
+        fig4.add_vline(x=0, line_color="#AAAAAA", line_width=1.5)
         fig4.update_layout(
+            barmode="overlay",
             title=f"Club Path Distribution — {', '.join(impact_clubs)}",
             xaxis_title="Club Path (°)<br><sub>← Out-to-In  |  In-to-Out →</sub>",
-            yaxis_title="Density",
+            yaxis_title="Count",
             plot_bgcolor="white", paper_bgcolor="white",
             xaxis=dict(showgrid=False, zeroline=False),
-            yaxis=dict(showgrid=False, zeroline=False),
+            yaxis=dict(gridcolor="#EEEEEE", zeroline=False),
             height=550, legend_title="Club",
         )
         st.plotly_chart(fig4, use_container_width=True)
