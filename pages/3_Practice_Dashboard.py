@@ -109,7 +109,8 @@ if not players:
     st.warning("No players found in database.")
     st.stop()
 
-player_options = {f"{p['first_name']} {p['last_name']}": p["player_id"] for p in players}
+players_sorted = sorted(players, key=lambda p: p["last_name"].lower())
+player_options = {f"{p['first_name']} {p['last_name']}": p["player_id"] for p in players_sorted}
 
 with st.sidebar:
     st.markdown("### Filters")
@@ -535,7 +536,6 @@ with _col_path:
                 x=cdf, name=club,
                 xbins=dict(start=cdf.min() - 0.5, end=cdf.max() + 0.5, size=1),
                 marker_color=color, opacity=0.6,
-                marker_line=dict(color="white", width=0.5)
             ))
             fig4.add_vline(x=float(cdf.mean()), line_color=color, line_width=2,
                            line_dash="dash",

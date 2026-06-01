@@ -151,7 +151,8 @@ if sb:
     try:
         players_res = sb.table("players").select("player_id, first_name, last_name").execute()
         player_list = players_res.data or []
-        player_options = {f"{p['first_name']} {p['last_name']}": p["player_id"] for p in player_list}
+        player_list_sorted = sorted(player_list, key=lambda p: p["last_name"].lower())
+            player_options = {f"{p['first_name']} {p['last_name']}": p["player_id"] for p in player_list_sorted}
     except Exception:
         player_options = {}
 
