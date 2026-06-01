@@ -638,11 +638,10 @@ with _col_path:
             yaxis=dict(gridcolor="#EEEEEE", zeroline=False, range=[-axis_range, axis_range]),
             height=550,
             legend=dict(
-                title="Club",
+                title=dict(text="Club", font=dict(size=13)),
                 x=1.02,
                 y=0.5,
-                yanchor="top",
-                title=dict(size=13)
+                yanchor="top"
             ),
             coloraxis_colorbar=dict(x=1.02, len=0.5, yanchor="top", y=1),
         )
