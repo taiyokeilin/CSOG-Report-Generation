@@ -485,18 +485,18 @@ with _col_impact:
             avg_h = club_df["face_impact_horizontal_mm"].mean()
             avg_v = club_df["face_impact_vertical_mm"].mean()
 
-            # Individual shots — note: toe positive, heel negative
+            # Individual shots — hidden from legend
             fig2.add_trace(go.Scatter(
                 x=club_df["face_impact_horizontal_mm"],
                 y=club_df["face_impact_vertical_mm"],
-                mode="markers", name=club,
+                mode="markers", name=club, showlegend=False,
                 marker=dict(size=8, color=color, opacity=0.6, line=dict(width=1, color="white")),
                 hovertemplate=f"<b>{club}</b><br>Horizontal: %{{x:.1f}} mm<br>Vertical: %{{y:.1f}} mm<extra></extra>",
             ))
-            # Average dot
+            # Average dot — in legend with club name, avg size/color
             fig2.add_trace(go.Scatter(
                 x=[avg_h], y=[avg_v],
-                mode="markers", name=f"{club} avg",
+                mode="markers", name=club, showlegend=True,
                 marker=dict(size=16, color=color, symbol="circle",
                             line=dict(width=2, color="white")),
                 hovertemplate=f"<b>{club} avg</b><br>Horizontal: {avg_h:.1f} mm<br>Vertical: {avg_v:.1f} mm<extra></extra>",
