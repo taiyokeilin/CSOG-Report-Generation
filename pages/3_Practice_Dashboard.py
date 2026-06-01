@@ -634,8 +634,13 @@ with _col_path:
             plot_bgcolor="white", paper_bgcolor="white",
             xaxis=dict(showgrid=False, zeroline=False, range=[-axis_range, axis_range]),
             yaxis=dict(gridcolor="#EEEEEE", zeroline=False, range=[-axis_range, axis_range]),
-            height=550, legend_title="Club",
-            legend=dict(x=1.12),
+            height=550,
+            legend=dict(
+                title="Club",
+                x=1.15,
+                y=0.3,
+                yanchor="top",
+            ),
             coloraxis_colorbar=dict(x=1.02, len=0.5, yanchor="top", y=1),
         )
         st.plotly_chart(fig4, use_container_width=True)
