@@ -490,14 +490,14 @@ with _col_impact:
                 x=club_df["face_impact_horizontal_mm"],
                 y=club_df["face_impact_vertical_mm"],
                 mode="markers", name=club, showlegend=False,
-                marker=dict(size=8, color=color, opacity=0.6, line=dict(width=1, color="white")),
+                marker=dict(size=12, color=color, opacity=0.6, line=dict(width=1, color="white")),
                 hovertemplate=f"<b>{club}</b><br>Horizontal: %{{x:.1f}} mm<br>Vertical: %{{y:.1f}} mm<extra></extra>",
             ))
             # Average dot — in legend with club name, avg size/color
             fig2.add_trace(go.Scatter(
                 x=[avg_h], y=[avg_v],
                 mode="markers", name=club, showlegend=True,
-                marker=dict(size=16, color=color, symbol="circle",
+                marker=dict(size=18, color=color, symbol="circle",
                             line=dict(width=2, color="white")),
                 hovertemplate=f"<b>{club} avg</b><br>Horizontal: {avg_h:.1f} mm<br>Vertical: {avg_v:.1f} mm<extra></extra>",
             ))
@@ -607,7 +607,7 @@ with _col_path:
                 x=cdf["club_path_deg"], y=cdf["face_angle_deg"],
                 mode="markers", name=club,
                 text=cdf["hover"], hovertemplate="%{text}<extra></extra>",
-                marker=dict(size=10, symbol=shape,
+                marker=dict(size=14, symbol=shape,
                             color=cdf["angle_of_attack_deg"],
                             colorscale="RdYlGn", cmin=aoa_min, cmax=aoa_max,
                             showscale=(i == 0),
