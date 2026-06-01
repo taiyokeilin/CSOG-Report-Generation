@@ -609,7 +609,9 @@ with _col_path:
                             color=cdf["angle_of_attack_deg"],
                             colorscale="RdYlGn", cmin=aoa_min, cmax=aoa_max,
                             showscale=(i == 0),
-                            colorbar=dict(title="Angle of Attack (°)", x=1.02, len=0.5, yanchor="top", y=1) if i == 0 else None,
+                            colorbar=dict(title="Angle of Attack (°)",
+                                          x=1.02, y=1, len=0.5, yanchor="top",
+                                          titlefont=dict(size=13)) if i == 0 else None,
                             line=dict(width=1, color="white"), opacity=0.85),
             ))
 
@@ -640,6 +642,7 @@ with _col_path:
                 x=1.02,
                 y=0.5,
                 yanchor="top",
+                titlefont=dict(size=13)
             ),
             coloraxis_colorbar=dict(x=1.02, len=0.5, yanchor="top", y=1),
         )
