@@ -514,24 +514,72 @@ with _col_impact:
 
 
 with _col_path:
-    path_cols = ["club", "club_path_deg", "face_angle_deg", "smash_factor",
-                 "club_speed_mph", "ball_speed_mph", "angle_of_attack_deg", "dynamic_loft_deg",
-                 "launch_angle_deg", "total_spin_rpm", "carry_yd", "offline_yd", "total_yd",
-                 "face_impact_horizontal_mm", "face_impact_vertical_mm", "_is_outlier"]
-    path_df = df[path_cols].dropna(subset=["club_path_deg", "face_angle_deg"]).copy()
+    has_path = df["club_path_deg"].notna().any()
+    has_face = df["face_angle_deg"].notna().any() if "face_angle_deg" in df.columns else False
 
-    if path_df.empty:
-        st.info("No club path / face angle data available.")
+    if not has_path:
+        st.info("No club path data available.")
+    elif not has_face:
+        # ── Density plot: club path distribution ─────────────────────────────
+        st.markdown("**Club Path Distribution**")
+        import numpy as np
+        from scipy.stats import gaussian_kde
+
+        density_df = df[["club", "club_path_deg", "_is_outlier"]].dropna(subset=["club_path_deg"])
+        density_plot_df = density_df[density_df["club"].isin(impact_clubs)]
+        fig4 = go.Figure()
+        BASE_COLORS_D = px.colors.qualitative.Plotly
+
+        for i, club in enumerate(impact_clubs):
+            cdf = density_plot_df[density_plot_df["club"] == club]["club_path_deg"].dropna()
+            if len(cdf) < 3:
+                continue
+            color = BASE_COLORS_D[i % len(BASE_COLORS_D)]
+            kde = gaussian_kde(cdf, bw_method="silverman")
+            x_range_kde = np.linspace(cdf.min() - 2, cdf.max() + 2, 300)
+            y_kde = kde(x_range_kde)
+            # Build fill color with transparency
+            import re
+            rgb_match = re.match(r"rgb\((\d+),\s*(\d+),\s*(\d+)\)", color)
+            fill_color = f"rgba({rgb_match.group(1)},{rgb_match.group(2)},{rgb_match.group(3)},0.15)" if rgb_match else color
+            fig4.add_trace(go.Scatter(
+                x=x_range_kde, y=y_kde,
+                mode="lines", name=club,
+                line=dict(color=color, width=2),
+                fill="tozeroy", fillcolor=fill_color,
+            ))
+            fig4.add_vline(x=float(cdf.mean()), line_color=color, line_width=1.5,
+                           line_dash="dash",
+                           annotation_text=f"{club}: {cdf.mean():.1f}°",
+                           annotation_position="top")
+
+        fig4.add_vline(x=0, line_color="#AAAAAA", line_width=1)
+        fig4.update_layout(
+            title=f"Club Path Distribution — {', '.join(impact_clubs)}",
+            xaxis_title="Club Path (°)<br><sub>← Out-to-In  |  In-to-Out →</sub>",
+            yaxis_title="Density",
+            plot_bgcolor="white", paper_bgcolor="white",
+            xaxis=dict(showgrid=False, zeroline=False),
+            yaxis=dict(showgrid=False, zeroline=False),
+            height=550, legend_title="Club",
+        )
+        st.plotly_chart(fig4, use_container_width=True)
+
     else:
-        # Compute smash factor for tooltip
+        # ── Scatter: club path vs face angle ─────────────────────────────────
+        path_cols = ["club", "club_path_deg", "face_angle_deg", "smash_factor",
+                     "club_speed_mph", "ball_speed_mph", "angle_of_attack_deg", "dynamic_loft_deg",
+                     "launch_angle_deg", "total_spin_rpm", "carry_yd", "offline_yd", "total_yd",
+                     "face_impact_horizontal_mm", "face_impact_vertical_mm", "_is_outlier"]
+        path_df = df[[c for c in path_cols if c in df.columns]].dropna(subset=["club_path_deg", "face_angle_deg"]).copy()
+
         path_df["smash"] = path_df["smash_factor"]
         mask = path_df["smash"].isna() & path_df["ball_speed_mph"].notna() & path_df["club_speed_mph"].notna()
         path_df.loc[mask, "smash"] = path_df.loc[mask, "ball_speed_mph"] / path_df.loc[mask, "club_speed_mph"]
 
-        path_clubs = impact_clubs  # shared with face impact selector
+        path_clubs = impact_clubs
         path_plot_df = path_df[path_df["club"].isin(path_clubs)].copy()
 
-        # Build custom hover text
         def fmt(val, decimals=1, suffix=""):
             return f"{val:.{decimals}f}{suffix}" if pd.notna(val) else "—"
 
@@ -554,11 +602,8 @@ with _col_path:
         ), axis=1)
 
         fig4 = go.Figure()
-
         SHAPES = ["circle", "square", "diamond", "triangle-up", "cross",
                   "star", "hexagon", "pentagon", "triangle-down", "x"]
-
-        # Color by angle of attack
         all_aoa = path_plot_df["angle_of_attack_deg"].dropna()
         aoa_min = all_aoa.min() if not all_aoa.empty else -10.0
         aoa_max = all_aoa.max() if not all_aoa.empty else 5.0
@@ -566,29 +611,18 @@ with _col_path:
         for i, club in enumerate(path_clubs):
             cdf = path_plot_df[path_plot_df["club"] == club].copy()
             shape = SHAPES[i % len(SHAPES)]
-
             fig4.add_trace(go.Scatter(
-                x=cdf["club_path_deg"],
-                y=cdf["face_angle_deg"],
-                mode="markers",
-                name=club,
-                text=cdf["hover"],
-                hovertemplate="%{text}<extra></extra>",
-                marker=dict(
-                    size=10,
-                    symbol=shape,
-                    color=cdf["angle_of_attack_deg"],
-                    colorscale="RdYlGn",
-                    cmin=aoa_min,
-                    cmax=aoa_max,
-                    showscale=(i == 0),
-                    colorbar=dict(title="Angle of Attack (°)", x=1.02, len=0.5, yanchor="top", y=1) if i == 0 else None,
-                    line=dict(width=1, color="white"),
-                    opacity=0.85,
-                ),
+                x=cdf["club_path_deg"], y=cdf["face_angle_deg"],
+                mode="markers", name=club,
+                text=cdf["hover"], hovertemplate="%{text}<extra></extra>",
+                marker=dict(size=10, symbol=shape,
+                            color=cdf["angle_of_attack_deg"],
+                            colorscale="RdYlGn", cmin=aoa_min, cmax=aoa_max,
+                            showscale=(i == 0),
+                            colorbar=dict(title="Angle of Attack (°)", x=1.02, len=0.5, yanchor="top", y=1) if i == 0 else None,
+                            line=dict(width=1, color="white"), opacity=0.85),
             ))
 
-        # Outlier overlay
         if not exclude_outliers and "_is_outlier" in path_plot_df.columns:
             path_out = path_plot_df[path_plot_df["_is_outlier"]]
             if not path_out.empty:
@@ -599,24 +633,17 @@ with _col_path:
                     hovertemplate="<b>Outlier</b><br>Path: %{x:.1f}°<br>Face: %{y:.1f}°<extra></extra>",
                 ))
 
-        # Reference lines at 0
         fig4.add_vline(x=0, line_color="#CCCCCC", line_width=1, line_dash="dash")
         fig4.add_hline(y=0, line_color="#CCCCCC", line_width=1, line_dash="dash")
-        # 45-degree line (face = path = perfectly square)
-        axis_range = max(
-            abs(path_plot_df["club_path_deg"]).max(),
-            abs(path_plot_df["face_angle_deg"]).max()
-        ) * 1.2 + 1
-
+        axis_range = max(abs(path_plot_df["club_path_deg"]).max(),
+                         abs(path_plot_df["face_angle_deg"]).max()) * 1.2 + 1
         fig4.update_layout(
             title=f"Club Path vs Face Angle — {', '.join(path_clubs)}",
             xaxis_title="Club Path (°)<br><sub>← Out-to-In  |  In-to-Out →</sub>",
             yaxis_title="Face Angle (°)<br><sub>← Closed  |  Open →</sub>",
             plot_bgcolor="white", paper_bgcolor="white",
-            xaxis=dict(showgrid=False, zeroline=False,
-                       range=[-axis_range, axis_range]),
-            yaxis=dict(gridcolor="#EEEEEE", zeroline=False,
-                       range=[-axis_range, axis_range]),
+            xaxis=dict(showgrid=False, zeroline=False, range=[-axis_range, axis_range]),
+            yaxis=dict(gridcolor="#EEEEEE", zeroline=False, range=[-axis_range, axis_range]),
             height=550, legend_title="Club",
             legend=dict(x=1.12),
             coloraxis_colorbar=dict(x=1.02, len=0.5, yanchor="top", y=1),
