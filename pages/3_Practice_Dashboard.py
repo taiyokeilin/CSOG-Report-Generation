@@ -601,6 +601,9 @@ with _col_path:
         for i, club in enumerate(path_clubs):
             cdf = path_plot_df[path_plot_df["club"] == club].copy()
             shape = SHAPES[i % len(SHAPES)]
+            colorbar_cfg = dict(title="Angle of Attack (°)",
+                                x=1.02, y=1, len=0.5, yanchor="top",
+                                titlefont=dict(size=13)) if i == 0 else {}
             fig4.add_trace(go.Scatter(
                 x=cdf["club_path_deg"], y=cdf["face_angle_deg"],
                 mode="markers", name=club,
@@ -609,9 +612,7 @@ with _col_path:
                             color=cdf["angle_of_attack_deg"],
                             colorscale="RdYlGn", cmin=aoa_min, cmax=aoa_max,
                             showscale=(i == 0),
-                            colorbar=dict(title="Angle of Attack (°)",
-                                          x=1.02, y=1, len=0.5, yanchor="top",
-                                          titlefont=dict(size=13)) if i == 0 else None,
+                            **{"colorbar": colorbar_cfg} if colorbar_cfg else {},
                             line=dict(width=1, color="white"), opacity=0.85)
             ))
 
