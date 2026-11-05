@@ -270,7 +270,7 @@ LEVEL_INFO = """**Level Multipliers**
 | 250–259 | 48.0 | 8.0 |
 """
 
-WIDTHS = [0.6, 0.7, 1.8, 0.8, 1.2, 2.2, 1.5, 1.6]
+WIDTHS = [1.3, 0.9, 1.8, 0.8, 1.2, 2.2, 1.5, 1.6]
 hdr = st.columns(WIDTHS)
 for i, t in enumerate(["Order", "Include", "Club", "Shots", "Skill", "Target Types", "Distance (yd)"]):
     hdr[i].markdown(f"**{t}**")
@@ -285,11 +285,13 @@ shot_counts = df["club"].value_counts().to_dict()
 for idx, cfg in enumerate(configs):
     row = st.columns(WIDTHS)
     up, dn = row[0].columns(2)
-    if up.button("↑", key=f"up_{ver}_{idx}", disabled=(idx == 0)):
+    if up.button("▲", key=f"up_{ver}_{idx}", disabled=(idx == 0),
+                 help="Move up", use_container_width=True):
         configs[idx], configs[idx - 1] = configs[idx - 1], configs[idx]
         st.session_state.rg_ver += 1
         st.rerun()
-    if dn.button("↓", key=f"dn_{ver}_{idx}", disabled=(idx == len(configs) - 1)):
+    if dn.button("▼", key=f"dn_{ver}_{idx}", disabled=(idx == len(configs) - 1),
+                 help="Move down", use_container_width=True):
         configs[idx], configs[idx + 1] = configs[idx + 1], configs[idx]
         st.session_state.rg_ver += 1
         st.rerun()
