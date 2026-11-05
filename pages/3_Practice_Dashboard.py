@@ -20,56 +20,77 @@ st.markdown('<p class="sub-header">Select a player and date range (from the menu
 
 
 # ── Supabase connection ───────────────────────────────────────────────────────
-@st.cache_resource
-def get_supabase():
-    from supabase import create_client
-    return create_client(st.secrets["supabase"]["url"], st.secrets["supabase"]["key"])
+from db import get_supabase
+
+PAGE = 1000  # Supabase returns at most 1,000 rows per request, so we page through
+
+
+def _fetch_all(make_query):
+    """Run a query repeatedly with .range() until every row has been returned."""
+    rows, start = [], 0
+    while True:
+        batch = make_query().range(start, start + PAGE - 1).execute().data or []
+        rows.extend(batch)
+        if len(batch) < PAGE:
+            return rows
+        start += PAGE
 
 
 @st.cache_data(ttl=300)
 def load_players():
     sb = get_supabase()
-    res = sb.table("players").select("player_id, first_name, last_name").execute()
+    res = (sb.table("players").select("player_id, first_name, last_name")
+           .eq("active", True).execute())
     return res.data or []
+
+
+SHOT_FIELDS = (
+    "shot_id, session_id, club, shot_num_session, shot_num_club, "
+    "ball_speed_mph, launch_angle_deg, side_angle_deg, "
+    "backspin_rpm, side_spin_rpm, tilt_angle_deg, total_spin_rpm, "
+    "carry_yd, total_yd, offline_yd, descent_angle_deg, peak_height_ft, to_pin_ft, "
+    "club_speed_mph, smash_factor, angle_of_attack_deg, "
+    "club_path_deg, face_angle_deg, face_to_path_deg, "
+    "dynamic_lie_deg, dynamic_loft_deg, closure_rate_dps, "
+    "face_impact_horizontal_mm, face_impact_vertical_mm, face_impact_from_center_mm"
+)
 
 
 @st.cache_data(ttl=60)
 def load_shots(player_id: str, date_from: str, date_to: str) -> pd.DataFrame:
     sb = get_supabase()
-    res = (
-        sb.table("shots")
-        .select(
-            "shot_id, session_id, club, shot_num_session, shot_num_club, "
-            "ball_speed_mph, launch_angle_deg, side_angle_deg, "
-            "backspin_rpm, side_spin_rpm, tilt_angle_deg, total_spin_rpm, "
-            "carry_yd, total_yd, offline_yd, descent_angle_deg, peak_height_ft, to_pin_ft, "
-            "club_speed_mph, smash_factor, angle_of_attack_deg, "
-            "club_path_deg, face_angle_deg, face_to_path_deg, "
-            "dynamic_lie_deg, dynamic_loft_deg, closure_rate_dps, "
-            "face_impact_horizontal_mm, face_impact_vertical_mm, face_impact_from_center_mm"
-        )
-        .eq("player_id", player_id)
-        .execute()
-    )
-    shots_df = pd.DataFrame(res.data or [])
-    if shots_df.empty:
-        return shots_df
 
-    session_ids = shots_df["session_id"].unique().tolist()
-    sess_res = (
+    # 1) Sessions for this player in the date range
+    sessions = _fetch_all(lambda: (
         sb.table("sessions")
         .select("session_id, session_date, launch_monitor_type")
-        .in_("session_id", session_ids)
+        .eq("player_id", player_id)
         .gte("session_date", date_from)
         .lte("session_date", date_to)
-        .execute()
-    )
-    sessions_df = pd.DataFrame(sess_res.data or [])
-    if sessions_df.empty:
+        .order("session_id")
+    ))
+    if not sessions:
+        return pd.DataFrame()
+    sessions_df = pd.DataFrame(sessions)
+
+    # 2) Their shots, a handful of sessions at a time
+    ids = sessions_df["session_id"].tolist()
+    shots = []
+    for i in range(0, len(ids), 40):
+        chunk = ids[i:i + 40]
+        shots.extend(_fetch_all(lambda: (
+            sb.table("shots").select(SHOT_FIELDS)
+            .in_("session_id", chunk).order("shot_id")
+        )))
+    if not shots:
         return pd.DataFrame()
 
-    merged = shots_df.merge(sessions_df, on="session_id", how="inner")
+    merged = pd.DataFrame(shots).merge(sessions_df, on="session_id", how="inner")
     merged["session_date"] = pd.to_datetime(merged["session_date"])
+    # Columns that are empty for a whole player arrive as None; make them numeric (NaN)
+    for col in SHOT_FIELDS.replace("\n", "").split(", "):
+        if col not in ("shot_id", "session_id", "club"):
+            merged[col] = pd.to_numeric(merged[col], errors="coerce")
     return merged
 
 
@@ -110,7 +131,7 @@ if not players:
     st.stop()
 
 players_sorted = sorted(players, key=lambda p: p["last_name"].lower())
-player_options = {f"{p['first_name']} {p['last_name']}": p["player_id"] for p in players_sorted}
+player_options = {f"{p['last_name']}, {p['first_name']}": p["player_id"] for p in players_sorted}
 
 with st.sidebar:
     st.markdown("### Filters")
@@ -185,7 +206,7 @@ else:
         color="club" if color_by_club else None,
         points="all",
         labels={"date_str": "Date", selected_metric_col: selected_metric_name, "club": "Club"},
-        title=f"{selected_metric_name} by Date — {selected_player_name}",
+        title=f"{selected_metric_name} by Date — {' '.join(reversed(selected_player_name.split(', ')))}",
     )
     # Highlight outliers if not already excluded
     if not exclude_outliers:
