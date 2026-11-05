@@ -7,6 +7,7 @@ import streamlit as st
 
 from db import get_supabase
 from report_builder import build_excel_report
+from pdf_reports import build_session_card_pdf
 from drive_upload import (
     drive_secrets_configured, get_drive_service,
     list_output_subfolders, upload_to_drive,
@@ -222,6 +223,7 @@ if st.session_state.get("rg_cfg_key") != cfg_key:
     st.session_state.rg_cfg_key = cfg_key
     st.session_state.rg_ver = st.session_state.get("rg_ver", 0) + 1
     st.session_state.pop("excel_bytes", None)
+    st.session_state.pop("pdf_bytes", None)
 configs = st.session_state.rg_configs
 ver = st.session_state.rg_ver
 
@@ -401,10 +403,15 @@ if st.button("🏌️ Generate Report", type="primary"):
             }
             try:
                 logo = "csog_logo.png" if os.path.exists("csog_logo.png") else None
+                base = f"{player['first_name']}_{player['last_name']}_{session_date.strftime('%Y%m%d')}".replace(" ", "_")
                 st.session_state.excel_bytes = build_excel_report(df, session_info, active, logo_path=logo)
-                st.session_state.report_filename = (
-                    f"{player['first_name']}_{player['last_name']}_{session_date.strftime('%Y%m%d')}.xlsx"
-                ).replace(" ", "_")
+                st.session_state.report_filename = base + ".xlsx"
+                try:
+                    st.session_state.pdf_bytes = build_session_card_pdf(df, session_info, active, logo_path=logo)
+                    st.session_state.pdf_filename = base + ".pdf"
+                except Exception as pdf_err:
+                    st.session_state.pop("pdf_bytes", None)
+                    st.warning(f"The Excel report is ready, but the PDF couldn't be built: {pdf_err}")
                 st.success("✅ Report generated!")
             except Exception as e:
                 st.error(f"❌ Error generating report: {e}")
@@ -412,14 +419,21 @@ if st.button("🏌️ Generate Report", type="primary"):
 
 if "excel_bytes" in st.session_state:
     st.markdown("**Save report:**")
-    dl_col, drive_col = st.columns([1, 2])
+    dl_col, pdf_col, drive_col = st.columns([1, 1, 2])
     with dl_col:
         st.download_button(
-            "⬇️ Download to Computer", data=st.session_state.excel_bytes,
+            "⬇️ Download Excel", data=st.session_state.excel_bytes,
             file_name=st.session_state.report_filename,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True,
         )
+    with pdf_col:
+        if "pdf_bytes" in st.session_state:
+            st.download_button(
+                "📄 Download PDF", data=st.session_state.pdf_bytes,
+                file_name=st.session_state.pdf_filename, mime="application/pdf",
+                use_container_width=True, type="primary",
+            )
     with drive_col:
         if drive_secrets_configured():
             service = get_drive_service()
