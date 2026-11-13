@@ -6,6 +6,7 @@ from datetime import date
 
 import streamlit as st
 
+from auth import require_login
 from db import get_supabase
 from parsers import parse_file
 from drive_upload import (
@@ -14,6 +15,7 @@ from drive_upload import (
 )
 
 st.set_page_config(page_title="Upload Session", page_icon="⛳", layout="wide")
+access = require_login(coach_only=True)
 
 st.markdown("""
 <style>
@@ -247,35 +249,9 @@ coach_ids = [c["coach_id"] for c in coaches]
 loc_ids = [l["location_id"] for l in locations]
 prog_ids = [p["program_id"] for p in programs]
 
-# ── Uploader (coach) ──────────────────────────────────────────────────────────
-uploader_id = st.selectbox(
-    "Coach (you)", coach_ids, index=None,
-    format_func=lambda i: coach_label[i],
-    placeholder="Select your name…" if coach_ids else "No coaches yet — add one below",
-    key="uploader_id",
-)
-
-with st.expander("Not in the list? Add a coach"):
-    a1, a2, a3 = st.columns(3)
-    nc_first = a1.text_input("First name", key="nc_first")
-    nc_last = a2.text_input("Last name", key="nc_last")
-    nc_email = a3.text_input("Google email", key="nc_email",
-                             help="Used for sign-in later. Stored in lowercase.")
-    if st.button("Add coach", key="add_coach"):
-        if not (nc_first.strip() and nc_last.strip() and nc_email.strip()):
-            st.warning("Enter first name, last name and email.")
-        else:
-            try:
-                sb.table("coaches").insert({
-                    "first_name": nc_first.strip(),
-                    "last_name": nc_last.strip(),
-                    "email": nc_email.strip().lower(),
-                }).execute()
-                clear_lookups()
-                st.success(f"Added {nc_first.strip()} {nc_last.strip()}.")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Couldn't add coach (is the email already used?): {e}")
+# ── Uploader (the logged-in coach) ────────────────────────────────────────────
+uploader_id = access["coach"]["coach_id"]
+st.caption(f"Uploading as **{access['name']}**")
 
 # ── Player ────────────────────────────────────────────────────────────────────
 player_mode = st.radio("Player", ["Select existing player", "Add new player"], horizontal=True)
@@ -353,8 +329,6 @@ if df is None:
     problems.append("Load a file above.")
 if already_saved:
     problems.append("This file has already been saved.")
-if not uploader_id:
-    problems.append("Select your name as the coach.")
 if player_mode == "Select existing player" and not player_id:
     problems.append("Select a player.")
 if player_mode == "Add new player":

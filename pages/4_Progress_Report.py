@@ -9,6 +9,9 @@ from pdf_reports import build_progress_pdf
 
 st.set_page_config(page_title="Progress Report", page_icon="⛳", layout="wide")
 
+from auth import require_login, filter_players
+access = require_login()
+
 st.markdown("""
 <style>
     .main-header {font-size: 2rem; font-weight: 700; color: #1F4E79; margin-bottom: 0;}
@@ -106,7 +109,7 @@ def load_period(player_id: str, date_from: str, date_to: str):
 
 
 # ── Selection ─────────────────────────────────────────────────────────────────
-players = load_players()
+players = filter_players(access, load_players())
 if not players:
     st.info("No players yet. Upload a session on the **Upload and Save Data** page first.")
     st.stop()

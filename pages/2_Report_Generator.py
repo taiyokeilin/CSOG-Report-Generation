@@ -15,6 +15,9 @@ from drive_upload import (
 
 st.set_page_config(page_title="Report Generator", page_icon="⛳", layout="wide")
 
+from auth import require_login, filter_players, can_edit
+access = require_login()
+
 st.markdown("""
 <style>
     .main-header {font-size: 2rem; font-weight: 700; color: #1F4E79; margin-bottom: 0;}
@@ -173,7 +176,7 @@ def build_configs(clubs_in_session, saved_rows):
 # ── SECTION 1: player + session ───────────────────────────────────────────────
 st.markdown('<p class="section-header">1 · Player and Session</p>', unsafe_allow_html=True)
 
-players = load_players()
+players = filter_players(access, load_players())
 if not players:
     st.info("No players yet. Upload a session on the **Upload and Save Data** page first.")
     st.stop()
@@ -328,6 +331,8 @@ st.session_state.rg_configs = configs
 # ── Save targets (versioned) ──────────────────────────────────────────────────
 def save_targets(effective: date):
     """Write the current settings as new dated rows. Old rows are never edited."""
+    if not can_edit(access, player_id):
+        raise PermissionError("You can view this player, but not change their targets.")
     eff = effective.isoformat()
     included = [c for c in configs if c["include"] and c["selected_target_types"]]
     new_keys = {(c["club"], c["skill"], t) for c in included for t in c["selected_target_types"]}
@@ -360,18 +365,21 @@ def save_targets(effective: date):
     return len(rows)
 
 
-with st.expander("💾 Save as this player's targets"):
-    st.caption("Saving adds a new dated version of this player's targets. Earlier versions are kept, "
-               "so reports for older sessions still use the targets that applied then. "
-               "Clubs you've unchecked are retired from this date on.")
-    eff_date = st.date_input("Targets take effect on", value=session_date, key=f"eff_{cfg_key}")
-    if st.button("Save targets", key="save_targets"):
-        try:
-            n = save_targets(eff_date)
-            st.success(f"Saved {n} target rows effective {eff_date}.")
-            st.cache_data.clear()
-        except Exception as e:
-            st.error(f"Couldn't save targets: {e}")
+if can_edit(access, player_id):
+    with st.expander("💾 Save as this player's targets"):
+        st.caption("Saving adds a new dated version of this player's targets. Earlier versions are kept, "
+                   "so reports for older sessions still use the targets that applied then. "
+                   "Clubs you've unchecked are retired from this date on.")
+        eff_date = st.date_input("Targets take effect on", value=session_date, key=f"eff_{cfg_key}")
+        if st.button("Save targets", key="save_targets"):
+            try:
+                n = save_targets(eff_date)
+                st.success(f"Saved {n} target rows effective {eff_date}.")
+                st.cache_data.clear()
+            except Exception as e:
+                st.error(f"Couldn't save targets: {e}")
+else:
+    st.caption("You're viewing this player's targets. Only the player or a coach can change them.")
 
 
 # ── SECTION 3: generate ───────────────────────────────────────────────────────

@@ -6,6 +6,9 @@ from datetime import date, timedelta
 
 st.set_page_config(page_title="Practice Dashboard", page_icon="⛳", layout="wide")
 
+from auth import require_login, filter_players
+access = require_login()
+
 st.markdown("""
 <style>
     .main-header {font-size: 2rem; font-weight: 700; color: #1F4E79; margin-bottom: 0;}
@@ -125,7 +128,7 @@ METRICS = {
 
 
 # ── SIDEBAR FILTERS ──────────────────────────────────────────────────────────
-players = load_players()
+players = filter_players(access, load_players())
 if not players:
     st.warning("No players found in database.")
     st.stop()
