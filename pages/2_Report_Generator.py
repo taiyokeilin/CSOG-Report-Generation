@@ -13,7 +13,7 @@ from drive_upload import (
     list_output_subfolders, upload_to_drive,
 )
 
-st.set_page_config(page_title="Report Generator", page_icon="⛳", layout="wide")
+st.set_page_config(page_title="Report Generator", layout="wide")
 
 from auth import require_login, filter_players, can_edit
 access = require_login()
@@ -29,7 +29,7 @@ st.markdown("""
 
 title_col, logo_col = st.columns([5, 1])
 with title_col:
-    st.markdown('<p class="main-header">⛳ Report Generator</p>', unsafe_allow_html=True)
+    st.markdown('<p class="main-header">Report Generator</p>', unsafe_allow_html=True)
     st.markdown('<p class="sub-header">Pick a player and session → review club targets → download the report</p>',
                 unsafe_allow_html=True)
 with logo_col:
@@ -282,7 +282,7 @@ for i, t in enumerate(["Order", "Include", "Club", "Shots", "Skill", "Target Typ
 with hdr[7]:
     lbl, btn = st.columns([2, 1])
     lbl.markdown("**Level (1–12)**")
-    with btn.popover("ℹ️"):
+    with btn.popover("Info"):
         st.markdown(LEVEL_INFO)
 
 shot_counts = df["club"].value_counts().to_dict()
@@ -366,7 +366,7 @@ def save_targets(effective: date):
 
 
 if can_edit(access, player_id):
-    with st.expander("💾 Save as this player's targets"):
+    with st.expander("Save as this player's targets"):
         st.caption("Saving adds a new dated version of this player's targets. Earlier versions are kept, "
                    "so reports for older sessions still use the targets that applied then. "
                    "Clubs you've unchecked are retired from this date on.")
@@ -397,7 +397,7 @@ def expand_configs(cfgs):
     return out
 
 
-if st.button("🏌️ Generate Report", type="primary"):
+if st.button("Generate Report", type="primary"):
     active = expand_configs(configs)
     if not active:
         st.warning("No clubs selected. Check **Include** for at least one club.")
@@ -420,9 +420,9 @@ if st.button("🏌️ Generate Report", type="primary"):
                 except Exception as pdf_err:
                     st.session_state.pop("pdf_bytes", None)
                     st.warning(f"The Excel report is ready, but the PDF couldn't be built: {pdf_err}")
-                st.success("✅ Report generated!")
+                st.success("Report generated!")
             except Exception as e:
-                st.error(f"❌ Error generating report: {e}")
+                st.error(f"Error generating report: {e}")
                 raise
 
 if "excel_bytes" in st.session_state:
@@ -430,7 +430,7 @@ if "excel_bytes" in st.session_state:
     dl_col, pdf_col, drive_col = st.columns([1, 1, 2])
     with dl_col:
         st.download_button(
-            "⬇️ Download Excel", data=st.session_state.excel_bytes,
+            "Download Excel", data=st.session_state.excel_bytes,
             file_name=st.session_state.report_filename,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True,
@@ -438,7 +438,7 @@ if "excel_bytes" in st.session_state:
     with pdf_col:
         if "pdf_bytes" in st.session_state:
             st.download_button(
-                "📄 Download PDF", data=st.session_state.pdf_bytes,
+                "Download PDF", data=st.session_state.pdf_bytes,
                 file_name=st.session_state.pdf_filename, mime="application/pdf",
                 use_container_width=True, type="primary",
             )
@@ -452,12 +452,12 @@ if "excel_bytes" in st.session_state:
                     ids = [f[1] for f in subfolders]
                     i = st.selectbox("Upload to Drive folder", range(len(names)),
                                      format_func=lambda k: names[k], key="output_folder_select")
-                    if st.button("☁️ Upload to Drive", use_container_width=True):
+                    if st.button("Upload to Drive", use_container_width=True):
                         with st.spinner("Uploading…"):
                             try:
                                 link = upload_to_drive(service, st.session_state.excel_bytes,
                                                        st.session_state.report_filename, ids[i])
-                                st.success(f"✅ Uploaded! [Open in Drive]({link})")
+                                st.success(f"Uploaded! [Open in Drive]({link})")
                             except Exception as e:
                                 st.error(f"Upload failed: {e}")
                 else:

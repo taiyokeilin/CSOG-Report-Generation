@@ -117,7 +117,7 @@ def can_edit(a: dict, player_id: str) -> bool:
 
 
 def _login_screen():
-    st.title("⛳ Golf Coaching Portal")
+    st.title("Golf Coaching Portal")
     st.write("Please log in to continue.")
     st.button("Log in", on_click=st.login, args=(PROVIDER,), type="primary")
     st.stop()

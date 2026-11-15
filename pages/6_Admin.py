@@ -5,7 +5,7 @@ import streamlit as st
 from auth import require_login
 from db import get_supabase
 
-st.set_page_config(page_title="Admin", page_icon="⛳", layout="wide")
+st.set_page_config(page_title="Admin", layout="wide")
 access = require_login(admin_only=True)
 
 st.markdown("""
@@ -16,7 +16,7 @@ st.markdown("""
                      border-bottom: 2px solid #BDD7EE; padding-bottom: 4px; margin-top: 1.5rem;}
 </style>
 """, unsafe_allow_html=True)
-st.markdown('<p class="main-header">⛳ Admin</p>', unsafe_allow_html=True)
+st.markdown('<p class="main-header">Admin</p>', unsafe_allow_html=True)
 st.markdown('<p class="sub-header">Manage coaches, locations and programs.</p>', unsafe_allow_html=True)
 
 sb = get_supabase()
@@ -40,7 +40,7 @@ st.dataframe(
 )
 st.caption("A coach logs in with the email shown here, so it must match the email on their login account.")
 
-with st.expander("➕ Add a coach"):
+with st.expander("Add a coach"):
     with st.form("add_coach", clear_on_submit=True):
         a1, a2, a3 = st.columns(3)
         first = a1.text_input("First name")
@@ -63,7 +63,7 @@ with st.expander("➕ Add a coach"):
                 except Exception as ex:
                     st.error(f"Couldn't add coach (is the email already used?): {ex}")
 
-with st.expander("✏️ Change a coach's role or access"):
+with st.expander("Change a coach's role or access"):
     if coaches:
         cid = st.selectbox("Coach", [c["coach_id"] for c in coaches],
                            format_func=lambda i: next(f"{c['first_name']} {c['last_name']}" for c in coaches if c["coach_id"] == i))

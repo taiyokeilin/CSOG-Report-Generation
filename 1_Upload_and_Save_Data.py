@@ -14,7 +14,7 @@ from drive_upload import (
     list_input_subfolders, list_files_in_folder, download_drive_file,
 )
 
-st.set_page_config(page_title="Upload Session", page_icon="⛳", layout="wide")
+st.set_page_config(page_title="Upload Session", layout="wide")
 access = require_login(coach_only=True)
 
 st.markdown("""
@@ -29,7 +29,7 @@ st.markdown("""
 # ── Header ────────────────────────────────────────────────────────────────────
 title_col, logo_col = st.columns([5, 1])
 with title_col:
-    st.markdown('<p class="main-header">⛳ Upload Session</p>', unsafe_allow_html=True)
+    st.markdown('<p class="main-header">Upload Session</p>', unsafe_allow_html=True)
     st.markdown('<p class="sub-header">Load a launch monitor file → fill in session details → save</p>',
                 unsafe_allow_html=True)
 with logo_col:
@@ -90,7 +90,7 @@ def load_coaches():
 @st.cache_data(ttl=30)
 def load_players():
     rows = (get_supabase().table("players")
-            .select("player_id, first_name, last_name, coach_id, location_id, program_id")
+            .select("player_id, first_name, last_name, coach_id, location_id, program_id, handedness")
             .eq("active", True).execute().data or [])
     return sorted(rows, key=lambda p: (p["last_name"].lower(), p["first_name"].lower()))
 
@@ -149,7 +149,7 @@ monitor_key = MONITOR_TYPES[monitor_label]
 
 drive_available = drive_secrets_configured()
 if drive_available:
-    tab_drive, tab_local = st.tabs(["☁️ Browse Google Drive", "💻 Upload from Computer"])
+    tab_drive, tab_local = st.tabs(["Browse Google Drive", "Upload from Computer"])
 else:
     tab_local = st.container()
     tab_drive = None
@@ -200,7 +200,7 @@ if file_bytes:
         with st.spinner("Parsing file…"):
             df = parse_cached(file_bytes, monitor_key)
     except Exception as e:
-        st.error(f"❌ Couldn't read **{file_name}** as {monitor_label}: {e}. "
+        st.error(f"Couldn't read **{file_name}** as {monitor_label}: {e}. "
                  "Check that the Launch Monitor selection matches the file.")
         df = None
 
@@ -208,7 +208,7 @@ records = []
 if df is not None:
     records = df_to_records(df)
     clubs_in_file = sorted({r.get("club") for r in records if r.get("club")})
-    st.success(f"✅ **{file_name}** — {len(records)} shots across {len(clubs_in_file)} clubs")
+    st.success(f"**{file_name}** — {len(records)} shots across {len(clubs_in_file)} clubs")
     with st.expander("Shots per club"):
         counts = {}
         for r in records:
@@ -230,7 +230,7 @@ if file_hash:
     if already_saved:
         p = already_saved.get("players") or {}
         who = f"{p.get('first_name', '')} {p.get('last_name', '')}".strip() or "a player"
-        st.warning(f"⚠️ This exact file was already saved as a session for **{who}** on "
+        st.warning(f"This exact file was already saved as a session for **{who}** on "
                    f"{already_saved['session_date']}. It can't be saved twice.")
 
 
@@ -278,6 +278,7 @@ else:
     n1, n2 = st.columns(2)
     new_first = n1.text_input("Player first name", key="np_first").strip()
     new_last = n2.text_input("Player last name", key="np_last").strip()
+    new_hand = st.radio("Handedness", ["Right", "Left"], index=None, horizontal=True, key="np_hand")
     default_idx = coach_ids.index(uploader_id) if uploader_id in coach_ids else None
     new_coach_id = st.selectbox(
         "Player's coach", coach_ids, index=default_idx,
@@ -336,6 +337,8 @@ if player_mode == "Add new player":
         problems.append("Enter the player's first and last name.")
     if not new_coach_id:
         problems.append("Select the player's coach.")
+    if not new_hand:
+        problems.append("Select the player's handedness (left or right).")
 if not location_id:
     problems.append("Select a location.")
 if not allow_same_day:
@@ -344,7 +347,7 @@ if not allow_same_day:
 for p in problems:
     st.caption(f"• {p}")
 
-if st.button("💾 Save to Database", type="primary", disabled=bool(problems)):
+if st.button("Save to Database", type="primary", disabled=bool(problems)):
     session_id = None
     try:
         with st.spinner("Saving…"):
@@ -357,6 +360,7 @@ if st.button("💾 Save to Database", type="primary", disabled=bool(problems)):
                     "coach_id": new_coach_id,
                     "location_id": location_id,
                     "program_id": program_id,
+                    "handedness": new_hand.lower(),
                 }).execute()
                 pid = ins.data[0]["player_id"]
                 player_coach_id = new_coach_id
@@ -374,7 +378,7 @@ if st.button("💾 Save to Database", type="primary", disabled=bool(problems)):
                     file_options={"content-type": ctype, "upsert": "true"},
                 )
             except Exception as e:
-                st.warning(f"⚠️ The original file couldn't be stored (the data will still be saved): {e}")
+                st.warning(f"The original file couldn't be stored (the data will still be saved): {e}")
                 storage_path = None
 
             # Session
@@ -405,7 +409,7 @@ if st.button("💾 Save to Database", type="primary", disabled=bool(problems)):
 
         clear_lookups()
         st.session_state["last_saved"] = (
-            f"✅ Saved {len(shot_rows)} shots from {session_date.strftime('%b %d, %Y')}. "
+            f"Saved {len(shot_rows)} shots from {session_date.strftime('%b %d, %Y')}. "
             "Ready for the next file."
         )
         for k in ("db_file_bytes", "db_file_name", "allow_same_day", "np_first", "np_last"):
@@ -420,4 +424,4 @@ if st.button("💾 Save to Database", type="primary", disabled=bool(problems)):
                 sb.table("sessions").delete().eq("session_id", session_id).execute()
             except Exception:
                 pass
-        st.error(f"❌ Nothing was saved. Error: {e}")
+        st.error(f"Nothing was saved. Error: {e}")

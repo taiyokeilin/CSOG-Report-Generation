@@ -4,7 +4,7 @@ import plotly.express as px
 import pandas as pd
 from datetime import date, timedelta
 
-st.set_page_config(page_title="Practice Dashboard", page_icon="⛳", layout="wide")
+st.set_page_config(page_title="Practice Dashboard", layout="wide")
 
 from auth import require_login, filter_players
 access = require_login()
@@ -18,7 +18,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<p class="main-header">⛳ Practice Dashboard</p>', unsafe_allow_html=True)
+st.markdown('<p class="main-header">Practice Dashboard</p>', unsafe_allow_html=True)
 st.markdown('<p class="sub-header">Select a player and date range (from the menu on the left) to view their development</p>', unsafe_allow_html=True)
 
 
@@ -182,7 +182,7 @@ with st.sidebar:
 
 
 # ── PLOT 1: Box Plot ──────────────────────────────────────────────────────────
-st.markdown('<p class="section-header">📦 Metric by Date</p>', unsafe_allow_html=True)
+st.markdown('<p class="section-header">Metric by Date</p>', unsafe_allow_html=True)
 
 p1c1, p1c2, p1c3 = st.columns([2, 2, 1])
 with p1c1:
@@ -238,7 +238,7 @@ def _darken_hex(hex_color: str, factor: float = 0.85) -> str:
     return "#{:02x}{:02x}{:02x}".format(int(r*factor), int(g*factor), int(b*factor))
 
 # ── PLOT 2: Carry Dispersion ──────────────────────────────────────────────────
-st.markdown('<p class="section-header">📍 Carry Dispersion</p>', unsafe_allow_html=True)
+st.markdown('<p class="section-header">Carry Dispersion</p>', unsafe_allow_html=True)
 
 disp_df = df[["club", "carry_yd", "offline_yd", "session_date"]].dropna()
 
@@ -467,7 +467,7 @@ else:
 
 
 # ── PLOTS 3 & 4: Face Impact + Club Path vs Face Angle (side by side) ──────
-st.markdown('<p class="section-header">🎯 Strike Location &nbsp;&nbsp;|&nbsp;&nbsp; 📦 Delivery</p>', unsafe_allow_html=True)
+st.markdown('<p class="section-header">Strike Location &nbsp;&nbsp;|&nbsp;&nbsp; Delivery</p>', unsafe_allow_html=True)
 
 # Shared club filter
 _all_clubs_34 = sorted(df["club"].dropna().unique().tolist())

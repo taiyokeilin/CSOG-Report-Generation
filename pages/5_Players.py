@@ -7,7 +7,7 @@ import streamlit as st
 from auth import require_login, filter_players, can_edit
 from db import get_supabase
 
-st.set_page_config(page_title="Players", page_icon="⛳", layout="wide")
+st.set_page_config(page_title="Players", layout="wide")
 access = require_login()
 
 st.markdown("""
@@ -22,7 +22,7 @@ st.markdown("""
 title_col, logo_col = st.columns([5, 1])
 with title_col:
     heading = "Players" if access["is_coach"] else ("My Profile" if access["player_id"] else "My Child's Profile")
-    st.markdown(f'<p class="main-header">⛳ {heading}</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="main-header">{heading}</p>', unsafe_allow_html=True)
     st.markdown('<p class="sub-header">Profile details and session information. '
                 'Launch monitor data (the shots themselves) can only be added by coaches.</p>',
                 unsafe_allow_html=True)
@@ -44,7 +44,7 @@ def load_lookups():
 
 def load_players():
     rows = (sb.table("players")
-            .select("player_id, first_name, last_name, coach_id, location_id, program_id, email, active")
+            .select("player_id, first_name, last_name, coach_id, location_id, program_id, email, active, handedness")
             .execute().data or [])
     return sorted(rows, key=lambda p: (p["last_name"].lower(), p["first_name"].lower()))
 
@@ -114,6 +114,9 @@ if editable:
         program_id = c5.selectbox("Program", prog_ids, index=opt_index(prog_ids, player["program_id"]),
                                   format_func=lambda i: prog_by_id[i], placeholder="Select a program…")
 
+        hand_opts = ["right", "left"]
+        handedness = st.radio("Handedness", hand_opts, index=opt_index(hand_opts, player.get("handedness")),
+                              format_func=str.capitalize, horizontal=True)
         if access["is_coach"]:
             st.markdown("**Logins (coaches only)**")
             c6, c7 = st.columns(2)
@@ -125,7 +128,7 @@ if editable:
                 help="One per line. Each parent who logs in with one of these emails can view this player's data.",
                 height=100)
             active = st.checkbox("Active player", value=player["active"])
-        saved = st.form_submit_button("💾 Save profile", type="primary")
+        saved = st.form_submit_button("Save profile", type="primary")
 
     if saved:
         if not (first.strip() and last.strip()):
@@ -135,7 +138,8 @@ if editable:
                 if not can_edit(access, player_id):          # re-check on the server side
                     raise PermissionError("Not allowed.")
                 update = {"first_name": first.strip(), "last_name": last.strip(),
-                          "coach_id": coach_id, "location_id": location_id, "program_id": program_id}
+                          "coach_id": coach_id, "location_id": location_id, "program_id": program_id,
+                          "handedness": handedness}
                 if access["is_coach"]:
                     login_clean = login_email.strip().lower()
                     guardians = parse_emails(guardians_text)
@@ -161,7 +165,8 @@ if editable:
                     msg = "That login email is already used by another player."
                 st.error(f"Couldn't save: {msg}")
 else:
-    cols = st.columns(3)
+    cols = st.columns(4)
+    cols[3].markdown(f"**Handedness**  \n{(player.get('handedness') or '-').capitalize()}")
     cols[0].markdown(f"**Name**  \n{player['first_name']} {player['last_name']}")
     cols[1].markdown(f"**Coach**  \n{coach_by_id.get(player['coach_id'], '-')}")
     cols[2].markdown(f"**Location / Program**  \n{loc_by_id.get(player['location_id'], '-')} / "
@@ -186,7 +191,7 @@ st.dataframe(
 )
 
 if editable:
-    with st.expander("✏️ Edit a session's details"):
+    with st.expander("Edit a session's details"):
         sess_label = {s["session_id"]: datetime.strptime(s["session_date"], "%Y-%m-%d").strftime("%b %d, %Y")
                       + (f" · Week {s['week']}" if s.get("week") else "") for s in sessions}
         sid = st.selectbox("Session", [s["session_id"] for s in sessions], format_func=lambda i: sess_label[i])
@@ -201,7 +206,7 @@ if editable:
                                    format_func=lambda i: loc_by_id[i], placeholder="Select…")
             new_prog = m4.selectbox("Program", prog_ids, index=opt_index(prog_ids, s["program_id"]),
                                     format_func=lambda i: prog_by_id[i], placeholder="Select…")
-            if st.form_submit_button("💾 Save session details"):
+            if st.form_submit_button("Save session details"):
                 try:
                     if not can_edit(access, player_id):
                         raise PermissionError("Not allowed.")
@@ -216,7 +221,7 @@ if editable:
                     st.error(f"Couldn't save: {e}")
 
 if access["is_coach"]:
-    with st.expander("🗑️ Delete a session (coaches only)"):
+    with st.expander("Delete a session (coaches only)"):
         st.caption("This permanently removes the session and all of its shots. Use it to fix a mistaken upload.")
         del_id = st.selectbox("Session to delete", [s["session_id"] for s in sessions],
                               format_func=lambda i: next(

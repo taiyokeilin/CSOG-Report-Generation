@@ -7,7 +7,7 @@ import streamlit as st
 from db import get_supabase
 from pdf_reports import build_progress_pdf
 
-st.set_page_config(page_title="Progress Report", page_icon="⛳", layout="wide")
+st.set_page_config(page_title="Progress Report", layout="wide")
 
 from auth import require_login, filter_players
 access = require_login()
@@ -23,7 +23,7 @@ st.markdown("""
 
 title_col, logo_col = st.columns([5, 1])
 with title_col:
-    st.markdown('<p class="main-header">⛳ Progress Report</p>', unsafe_allow_html=True)
+    st.markdown('<p class="main-header">Progress Report</p>', unsafe_allow_html=True)
     st.markdown('<p class="sub-header">Pick a player and a date range → download a progress report PDF</p>',
                 unsafe_allow_html=True)
 with logo_col:
@@ -155,7 +155,7 @@ st.markdown('<p class="section-header">3 · Generate Report</p>', unsafe_allow_h
 player = next(p for p in players if p["player_id"] == player_id)
 player_name = f"{player['first_name']} {player['last_name']}"
 
-if st.button("📄 Generate Progress Report", type="primary"):
+if st.button("Generate Progress Report", type="primary"):
     with st.spinner("Building report…"):
         try:
             logo = "csog_logo.png" if os.path.exists("csog_logo.png") else None
@@ -166,12 +166,12 @@ if st.button("📄 Generate Progress Report", type="primary"):
             st.session_state.progress_pdf_name = (
                 f"{player['first_name']}_{player['last_name']}_Progress_{date_to.strftime('%Y%m%d')}.pdf"
             ).replace(" ", "_")
-            st.success("✅ Report generated!")
+            st.success("Report generated!")
         except Exception as e:
-            st.error(f"❌ Couldn't build the report: {e}")
+            st.error(f"Couldn't build the report: {e}")
             raise
 
 if "progress_pdf" in st.session_state:
-    st.download_button("⬇️ Download PDF", data=st.session_state.progress_pdf,
+    st.download_button("Download PDF", data=st.session_state.progress_pdf,
                        file_name=st.session_state.progress_pdf_name, mime="application/pdf",
                        type="primary")
