@@ -270,9 +270,9 @@ head_col, radar_col = st.columns([3, 1])
 player_rec = next(p for p in players_sorted if p["player_id"] == selected_player_id)
 coach_name = load_coach_names().get(player_rec.get("coach_id"), "")
 with head_col:
-    st.markdown(f'<p class="player-name">{first_name} {last_name}</p>', unsafe_allow_html=True)
+    st.markdown(f'<div class="player-name">{first_name} {last_name}</div>', unsafe_allow_html=True)
     if coach_name:
-        st.markdown(f'<p class="player-coach">Coach: {coach_name}</p>', unsafe_allow_html=True)
+        st.markdown(f'<div class="player-coach">Coach: {coach_name}</div>', unsafe_allow_html=True)
     st.markdown(
         f'<div class="stat-tile"><div class="stat-num">{len(df):,}</div><div class="stat-label">Shots</div></div>'
         f'<div class="stat-tile"><div class="stat-num">{n_sessions}</div><div class="stat-label">Sessions</div></div>'
