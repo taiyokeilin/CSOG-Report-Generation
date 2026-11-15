@@ -258,9 +258,7 @@ st.markdown("""
 <style>
     .player-name {font-size: 4.5rem; font-weight: 700; color: #1F4E79; line-height: 1.05; margin: 0.5rem 0 0.3rem 0;}
     .player-coach {font-size: 1.2rem; color: #555; margin: 0 0 1.2rem 0;}
-    .stat-tile {display: inline-block; margin-right: 2.2rem;}
-    .stat-num {font-size: 2rem; font-weight: 700; color: #2E75B6; line-height: 1;}
-    .stat-label {font-size: 0.8rem; color: #555; text-transform: uppercase; letter-spacing: 0.05em;}
+    .stat-line {font-size: 1.6rem; font-weight: 600; color: #2E75B6; margin: 0 0 0.8rem 0;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -273,11 +271,10 @@ with head_col:
     st.markdown(f'<div class="player-name">{first_name} {last_name}</div>', unsafe_allow_html=True)
     if coach_name:
         st.markdown(f'<div class="player-coach">Coach: {coach_name}</div>', unsafe_allow_html=True)
-    st.markdown(
-        f'<div class="stat-tile"><div class="stat-num">{len(df):,}</div><div class="stat-label">Shots</div></div>'
-        f'<div class="stat-tile"><div class="stat-num">{n_sessions}</div><div class="stat-label">Sessions</div></div>'
-        f'<div class="stat-tile"><div class="stat-num">{df["club"].nunique()}</div><div class="stat-label">Clubs</div></div>',
-        unsafe_allow_html=True)
+    n_clubs = df["club"].nunique()
+    plural = lambda n, word: f"{n:,} {word}" + ("" if n == 1 else "s")
+    st.markdown(f'<div class="stat-line">{plural(len(df), "shot")} - {plural(n_sessions, "session")} - '
+                f'{plural(n_clubs, "club")}</div>', unsafe_allow_html=True)
     if exclude_outliers:
         st.caption(f"{n_outliers} outlier shots excluded")
 with radar_col:
