@@ -152,22 +152,40 @@ def targets_as_of(player_id: str, day: str):
     return get_supabase().rpc("player_targets_as_of", {"p_player_id": player_id, "p_date": day}).execute().data or []
 
 
-def radar_scores(shots: pd.DataFrame, player_id: str) -> dict:
-    """label -> (successes, attempts) using the targets in force on each session's date."""
-    totals = {label: [0, 0] for label, _, _ in RADAR_AXES}
+def goal_rows(shots: pd.DataFrame, player_id: str) -> pd.DataFrame:
+    """One row per session day, club and target: attempts, successes, and the goal rate.
+    Each day uses the targets that were saved as of that day (not today's targets)."""
+    out = []
+    if shots.empty:
+        return pd.DataFrame(columns=["date", "club", "skill", "target_type", "attempts", "successes",
+                                     "actual_pct", "target_pct"])
     for (day, club), group in shots.groupby([shots["session_date"].dt.strftime("%Y-%m-%d"), "club"]):
         for t in targets_as_of(player_id, day):
             if t["club"] != club:
                 continue
-            for label, skill, ttype in RADAR_AXES:
-                if t["skill"] == skill and t["target_type"] == ttype:
-                    stats = compute_club_stats(group, club_name=club, target_type=ttype,
-                                               distance_yd=t.get("distance_yd"), level=int(t["level"]),
-                                               section=skill)
-                    if stats["successes"] is not None:
-                        totals[label][0] += stats["successes"]
-                        totals[label][1] += stats["attempts"]
-    return {k: tuple(v) for k, v in totals.items()}
+            stats = compute_club_stats(group, club_name=club, target_type=t["target_type"],
+                                       distance_yd=t.get("distance_yd"), level=int(t["level"]),
+                                       section=t["skill"])
+            if stats["successes"] is None:
+                continue
+            out.append({
+                "date": pd.Timestamp(day), "club": club, "skill": t["skill"], "target_type": t["target_type"],
+                "attempts": stats["attempts"], "successes": stats["successes"],
+                "actual_pct": 100 * stats["successes"] / stats["attempts"],
+                "target_pct": None if stats["target_pct"] is None else 100 * stats["target_pct"],
+            })
+    return pd.DataFrame(out, columns=["date", "club", "skill", "target_type", "attempts", "successes",
+                                      "actual_pct", "target_pct"])
+
+
+def radar_scores(shots: pd.DataFrame, player_id: str) -> dict:
+    """label -> (successes, attempts) across all shots in the range."""
+    rows = goal_rows(shots, player_id)
+    totals = {}
+    for label, skill, ttype in RADAR_AXES:
+        sub = rows[(rows["skill"] == skill) & (rows["target_type"] == ttype)]
+        totals[label] = (int(sub["successes"].sum()), int(sub["attempts"].sum()))
+    return totals
 
 
 def radar_figure(scores: dict) -> go.Figure:
@@ -194,7 +212,7 @@ def radar_figure(scores: dict) -> go.Figure:
         polar=dict(radialaxis=dict(range=[0, 100], tickvals=[25, 50, 75, 100], ticksuffix="%",
                                    tickfont=dict(size=9), gridcolor="#D9E2EC"),
                    angularaxis=dict(tickfont=dict(size=9), rotation=90, direction="clockwise"), bgcolor="rgba(0,0,0,0)"),
-        showlegend=False, margin=dict(l=70, r=70, t=25, b=25), height=190,
+        showlegend=False, margin=dict(l=95, r=95, t=25, b=25), height=210,
     )
     return fig
 
@@ -258,13 +276,13 @@ st.markdown("""
 <style>
     .player-name {font-size: 4.5rem; font-weight: 700; color: #1F4E79; line-height: 1.05; margin: 0.5rem 0 0.3rem 0;}
     .player-coach {font-size: 1.2rem; color: #555; margin: 0 0 1.2rem 0;}
-    .stat-line {font-size: 1.6rem; font-weight: 600; color: #2E75B6; margin: 0 0 0.8rem 0;}
+    .stat-line {font-size: 1.3rem; font-weight: 600; color: #2E75B6; margin: 0 0 0.8rem 0;}
 </style>
 """, unsafe_allow_html=True)
 
 last_name, first_name = [x.strip() for x in selected_player_name.split(",", 1)]
 n_sessions = df["session_date"].dt.date.nunique()
-head_col, radar_col = st.columns([3, 1])
+head_col, radar_col = st.columns([5, 2])
 player_rec = next(p for p in players_sorted if p["player_id"] == selected_player_id)
 coach_name = load_coach_names().get(player_rec.get("coach_id"), "")
 with head_col:
@@ -273,7 +291,7 @@ with head_col:
         st.markdown(f'<div class="player-coach">Coach: {coach_name}</div>', unsafe_allow_html=True)
     n_clubs = df["club"].nunique()
     plural = lambda n, word: f"{n:,} {word}" + ("" if n == 1 else "s")
-    st.markdown(f'<div class="stat-line">{plural(len(df), "shot")} - {plural(n_sessions, "session")} - '
+    st.markdown(f'<div class="stat-line">{plural(len(df), "shot")} &bull; {plural(n_sessions, "session")} &bull; '
                 f'{plural(n_clubs, "club")}</div>', unsafe_allow_html=True)
     if exclude_outliers:
         st.caption(f"{n_outliers} outlier shots excluded")
@@ -284,492 +302,583 @@ with radar_col:
                "Follows the date range and outlier setting, not the club filter.")
 
 
-# ── PLOT 1: Box Plot ──────────────────────────────────────────────────────────
-st.markdown('<p class="section-header">Metric by Date</p>', unsafe_allow_html=True)
-
-p1c1, p1c2, p1c3 = st.columns([2, 2, 1])
-with p1c1:
-    selected_metric_name = st.selectbox("Display Metric", list(METRICS.keys()), key="box_metric")
-    selected_metric_col  = METRICS[selected_metric_name]
-with p1c2:
-    box_clubs_available = sorted(df["club"].dropna().unique().tolist())
-    box_clubs = st.multiselect("Club(s)", box_clubs_available, default=box_clubs_available, key="box_clubs")
-with p1c3:
-    color_by_club = st.checkbox("Color by club", value=True, key="box_color")
-
-plot_df = df[df["club"].isin(box_clubs)][["session_date", "club", selected_metric_col]].dropna(subset=[selected_metric_col]).copy()
-plot_df["date_str"] = plot_df["session_date"].dt.strftime("%b %d")
-
-if plot_df.empty:
-    st.info(f"No data available for {selected_metric_name}.")
-else:
-    # Need full df (pre-exclusion) for outlier highlighting when not excluded
-    plot_df_full = df[df["club"].isin(box_clubs)][["session_date", "club", selected_metric_col, "_is_outlier"]].dropna(subset=[selected_metric_col]).copy()
-    plot_df_full["date_str"] = plot_df_full["session_date"].dt.strftime("%b %d")
-
-    fig1 = px.box(
-        plot_df, x="date_str", y=selected_metric_col,
-        color="club" if color_by_club else None,
-        points="all",
-        labels={"date_str": "Date", selected_metric_col: selected_metric_name, "club": "Club"},
-        title=f"{selected_metric_name} by Date — {' '.join(reversed(selected_player_name.split(', ')))}",
-    )
-    # Highlight outliers if not already excluded
-    if not exclude_outliers:
-        outlier_df = plot_df_full[plot_df_full["_is_outlier"]]
-        if not outlier_df.empty:
-            fig1.add_trace(go.Scatter(
-                x=outlier_df["date_str"], y=outlier_df[selected_metric_col],
-                mode="markers", name="Outlier",
-                marker=dict(size=10, color="red", symbol="x", line=dict(width=2, color="darkred")),
-                hovertemplate="<b>Outlier</b><br>Date: %{x}<br>Value: %{y}<extra></extra>",
-            ))
-    fig1.update_layout(
-        height=500, plot_bgcolor="white", paper_bgcolor="white",
-        xaxis=dict(showgrid=False), yaxis=dict(gridcolor="#EEEEEE"),
-        legend_title="Club",
-    )
-    st.plotly_chart(fig1, use_container_width=True)
-
-
-
-
 def _darken_hex(hex_color: str, factor: float = 0.85) -> str:
     """Return a slightly darker version of a hex color."""
     hex_color = hex_color.lstrip("#")
     r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
     return "#{:02x}{:02x}{:02x}".format(int(r*factor), int(g*factor), int(b*factor))
 
-# ── PLOT 2: Carry Dispersion ──────────────────────────────────────────────────
-st.markdown('<p class="section-header">Carry Dispersion</p>', unsafe_allow_html=True)
 
-disp_df = df[["club", "carry_yd", "offline_yd", "session_date"]].dropna()
+PAGES = ["GOALS", "DELIVERY/IMPACT", "BALL FLIGHT"]
+st.markdown("""<style>
+.st-key-page_tabs, .st-key-page_tabs > div, .st-key-page_tabs [data-testid="stButtonGroup"], .st-key-page_tabs [role="radiogroup"] {width: 100% !important; gap: 0 !important;}
+.st-key-page_tabs [role="radiogroup"] {display: flex !important; flex-wrap: nowrap !important; max-width: none !important;}
+.st-key-page_tabs button {flex: 1 1 0 !important; min-width: 0 !important; min-height: 2.6rem !important; border-radius: 0 !important;
+    background: #FFFFFF !important; border: 1px solid #C9CED3 !important; margin-left: -1px !important;}
+.st-key-page_tabs button p {font-size: 0.85rem !important; font-weight: 500 !important; letter-spacing: 0.04em; color: #333 !important; white-space: nowrap !important; overflow: visible !important;}
+.st-key-page_tabs button[aria-checked="true"], .st-key-page_tabs button[data-selected="true"], .st-key-page_tabs button[kind="segmented_controlActive"] {
+    background: #4D8F97 !important; border-color: #4D8F97 !important;}
+.st-key-page_tabs button[aria-checked="true"] p, .st-key-page_tabs button[data-selected="true"] p, .st-key-page_tabs button[kind="segmented_controlActive"] p {color: #FFFFFF !important;}
+.st-key-page_tabs button:first-child {border-radius: 4px 0 0 4px !important; margin-left: 0 !important;}
+.st-key-page_tabs button:last-child {border-radius: 0 4px 4px 0 !important;}
+</style>""", unsafe_allow_html=True)
 
-if disp_df.empty:
-    st.info("No carry/offline data available.")
-else:
-    p3c1, p3c2 = st.columns([2, 1])
-    with p3c1:
-        disp_clubs = st.multiselect("Club(s)", sorted(disp_df["club"].unique()),
-                                    default=[sorted(disp_df["club"].unique())[0]], key="disp_club")
-    with p3c2:
-        color_by_date = st.checkbox("Color by date", value=False, key="disp_color")
 
-    p3d1, p3d2, p3d3 = st.columns([1, 1, 1])
-    with p3d1:
-        show_ellipse = st.checkbox("Show each club's dispersion", value=False, key="disp_ellipse")
-        hide_shots   = st.checkbox("Remove individual shots", value=False, key="disp_hide_shots")
-    with p3d2:
-        single_club = len(disp_clubs) == 1
-        show_proximity = st.checkbox(
-            "Show proximity circles" + ("" if single_club else " (single club only)"),
-            value=False, key="disp_prox",
-            disabled=not single_club,
-        )
-        if not single_club:
-            st.caption("Select one club to enable proximity circles.")
-    with p3d3:
-        if show_proximity or show_ellipse:
-            intended_carry = st.number_input("Intended carry (yd)", min_value=0, max_value=400,
-                                             value=0, step=5, key="disp_target")
-            disp_level = st.slider("Level", 1, 12, value=5, key="disp_level")
-        else:
-            intended_carry = 0
-            disp_level = 5
+def _keep_page():
+    """Clicking the selected button again would clear it; put the previous page back."""
+    if st.session_state.get("dash_page") is None:
+        st.session_state["dash_page"] = st.session_state.get("dash_last", PAGES[0])
 
-    disp_plot_df = disp_df[disp_df["club"].isin(disp_clubs)].copy()
-    disp_plot_df["date_str"] = disp_plot_df["session_date"].dt.strftime("%b %d, %Y")
 
-    # Proximity to hole if intended carry set
-    if intended_carry > 0:
-        import math as _math
-        def _prox(row):
-            if pd.isna(row["carry_yd"]) or pd.isna(row["offline_yd"]):
-                return None
-            return _math.sqrt(row["offline_yd"]**2 + (intended_carry - row["carry_yd"])**2) * 3
-        disp_plot_df["proximity_ft"] = disp_plot_df.apply(_prox, axis=1)
-        def _fmt_prox(ft):
-            if ft is None or pd.isna(ft): return "—"
-            total_in = ft * 12
-            feet = int(total_in // 12)
-            inches = round(total_in % 12)
-            if inches == 12: feet += 1; inches = 0
-            return str(feet) + "\'" + str(inches) + "\""
-        disp_plot_df["prox_str"] = disp_plot_df["proximity_ft"].apply(_fmt_prox)
+st.session_state.setdefault("dash_page", PAGES[0])
+with st.container(key="page_tabs"):
+    page = st.segmented_control("Section", PAGES, key="dash_page", on_change=_keep_page,
+                                label_visibility="collapsed")
+page = page or st.session_state.get("dash_last", PAGES[0])
+st.session_state["dash_last"] = page
+
+CLUB_PALETTE = px.colors.qualitative.Plotly
+club_color = {c: CLUB_PALETTE[i % len(CLUB_PALETTE)] for i, c in enumerate(sorted(df["club"].dropna().unique()))}
+display_name = f"{first_name} {last_name}"
+
+
+# ── Metric by date: median with 20th and 80th percentile lines ──
+def render_metric_by_date(page_key: str):
+    st.markdown('<p class="section-header">Metric by Date</p>', unsafe_allow_html=True)
+    c1, c2 = st.columns([2, 3])
+    with c1:
+        metric_name = st.selectbox("Display Metric", list(METRICS.keys()), key=f"mbd_metric_{page_key}")
+        metric_col = METRICS[metric_name]
+    with c2:
+        available = sorted(df["club"].dropna().unique().tolist())
+        clubs = st.multiselect("Club(s)", available, default=available, key=f"mbd_clubs_{page_key}")
+
+    sub = df[df["club"].isin(clubs)][["session_date", "club", metric_col]].dropna(subset=[metric_col]).copy()
+    if sub.empty:
+        st.info(f"No data available for {metric_name}.")
+        return
+    sub["day"] = sub["session_date"].dt.normalize()
+    agg = (sub.groupby(["club", "day"])[metric_col]
+              .agg(median="median", p20=lambda s: s.quantile(0.2), p80=lambda s: s.quantile(0.8), n="size")
+              .reset_index().sort_values("day"))
+
+    fig = go.Figure()
+    for club in sorted(agg["club"].unique()):
+        g = agg[agg["club"] == club]
+        color = club_color.get(club, "#2E75B6")
+        fig.add_trace(go.Scatter(
+            x=g["day"], y=g["median"], mode="lines+markers", name=club, legendgroup=club,
+            line=dict(color=color, width=3), marker=dict(size=7),
+            customdata=g[["n", "p20", "p80"]].to_numpy(),
+            hovertemplate=(f"<b>{club}</b><br>%{{x|%b %d, %Y}}<br>Median: %{{y:.1f}}<br>"
+                           "20th pct: %{customdata[1]:.1f}<br>80th pct: %{customdata[2]:.1f}"
+                           "<br>%{customdata[0]} shots<extra></extra>")))
+        for col, label in (("p20", "20th pct"), ("p80", "80th pct")):
+            fig.add_trace(go.Scatter(
+                x=g["day"], y=g[col], mode="lines", name=f"{club} {label}", legendgroup=club, showlegend=False,
+                line=dict(color=color, width=1.3, dash="dash"),
+                hovertemplate=f"<b>{club}</b> {label}<br>%{{x|%b %d, %Y}}: %{{y:.1f}}<extra></extra>"))
+    fig.update_layout(
+        title=f"{metric_name} by Date - {display_name}",
+        height=480, plot_bgcolor="white", paper_bgcolor="white", legend_title="Club",
+        xaxis=dict(showgrid=False, tickformat="%b %d", title="Date"),
+        yaxis=dict(gridcolor="#EEEEEE", title=metric_name),
+    )
+    st.plotly_chart(fig, use_container_width=True)
+    st.caption("Solid line: median for the day. Dashed lines: 20th and 80th percentile.")
+
+
+# ── Goals: share of shots on target, by session, with each club's goal ──
+GOAL_ORDER = [("Wedge Play", "Proximity"), ("Wedge Play", "Distance Control"),
+              ("Approach", "Proximity"), ("Approach", "Distance Control"),
+              ("Driving", "Distance"), ("Driving", "Dispersion"),
+              ("Putting", "Proximity"), ("Putting", "Distance Control"),
+              ("Other", "Proximity"), ("Other", "Distance Control"),
+              ("Other", "Distance"), ("Other", "Dispersion")]
+
+
+def render_goals():
+    st.markdown('<p class="section-header">Targets and Goals</p>', unsafe_allow_html=True)
+    rows = goal_rows(df, selected_player_id)
+    if rows.empty:
+        st.info("No saved targets match this player's shots in the selected range. "
+                "Save targets for this player on the Report Generator page.")
+        return
+    st.caption("Share of shots that hit the target in each session. Solid lines are actual results; "
+               "dashed lines are the goal for each club. Each session uses the targets saved on that day.")
+    groups = [g for g in GOAL_ORDER if ((rows["skill"] == g[0]) & (rows["target_type"] == g[1])).any()]
+    for i in range(0, len(groups), 2):
+        cols = st.columns(2)
+        for col, (skill, ttype) in zip(cols, groups[i:i + 2]):
+            sub = rows[(rows["skill"] == skill) & (rows["target_type"] == ttype)].sort_values("date")
+            fig = go.Figure()
+            for club in sorted(sub["club"].unique()):
+                g = sub[sub["club"] == club]
+                color = club_color.get(club, "#2E75B6")
+                fig.add_trace(go.Scatter(
+                    x=g["date"], y=g["actual_pct"], mode="lines+markers", name=club, legendgroup=club,
+                    line=dict(color=color, width=3), marker=dict(size=7),
+                    customdata=g[["successes", "attempts", "target_pct"]].to_numpy(),
+                    hovertemplate=(f"<b>{club}</b><br>%{{x|%b %d, %Y}}<br>%{{y:.0f}}% on target "
+                                   "(%{customdata[0]} of %{customdata[1]} shots)<br>"
+                                   "Goal: %{customdata[2]:.0f}%<extra></extra>")))
+                if g["target_pct"].notna().any():
+                    fig.add_trace(go.Scatter(
+                        x=g["date"], y=g["target_pct"], mode="lines", name=f"{club} goal", legendgroup=club,
+                        showlegend=False, line=dict(color=color, width=1.5, dash="dash"), hoverinfo="skip"))
+            fig.update_layout(
+                title=f"{skill}: {ttype}", height=340, plot_bgcolor="white", paper_bgcolor="white",
+                margin=dict(l=50, r=20, t=50, b=40), legend_title="Club",
+                xaxis=dict(showgrid=False, tickformat="%b %d"),
+                yaxis=dict(gridcolor="#EEEEEE", range=[0, 105], ticksuffix="%", title="On target"))
+            col.plotly_chart(fig, use_container_width=True)
+
+
+# ── Existing plots, now grouped by page ──
+def render_ball_flight():
+    # ── PLOT 2: Carry Dispersion ──────────────────────────────────────────────────
+    st.markdown('<p class="section-header">Carry Dispersion</p>', unsafe_allow_html=True)
+
+    disp_df = df[["club", "carry_yd", "offline_yd", "session_date"]].dropna()
+
+    if disp_df.empty:
+        st.info("No carry/offline data available.")
     else:
-        disp_plot_df["prox_str"] = None
+        p3c1, p3c2 = st.columns([2, 1])
+        with p3c1:
+            disp_clubs = st.multiselect("Club(s)", sorted(disp_df["club"].unique()),
+                                        default=[sorted(disp_df["club"].unique())[0]], key="disp_club")
+        with p3c2:
+            color_by_date = st.checkbox("Color by date", value=False, key="disp_color")
 
-    # Symmetric x-axis around 0
-    max_offline = disp_plot_df["offline_yd"].abs().max()
-    x_range = [-max_offline * 1.2 - 1, max_offline * 1.2 + 1]
-
-    has_prox = intended_carry > 0 and "prox_str" in disp_plot_df.columns
-
-    def _build_disp_hover(row):
-        s = (f"<b>{row['club']}</b><br>"
-             f"Carry: {row['carry_yd']:.1f} yd<br>"
-             f"Offline: {row['offline_yd']:.1f} yd")
-        if has_prox and row.get("prox_str"):
-            s += f"<br>Proximity: {row['prox_str']}"
-        return s
-
-    disp_plot_df["hover_text"] = disp_plot_df.apply(_build_disp_hover, axis=1)
-
-    # Build figure manually for coordinated per-club colors
-    BASE_COLORS = px.colors.qualitative.Plotly
-    fig3 = go.Figure()
-    fig3.update_layout(title=f"Carry Dispersion — {', '.join(disp_clubs)}")
-
-    for i, club in enumerate(disp_clubs):
-        club_data = disp_plot_df[disp_plot_df["club"] == club]
-        normal_data  = club_data[~club_data["_is_outlier"]] if "_is_outlier" in club_data.columns else club_data
-        outlier_data = club_data[club_data["_is_outlier"]]  if "_is_outlier" in club_data.columns else club_data.iloc[0:0]
-
-        base_color = BASE_COLORS[i % len(BASE_COLORS)]
-        dark_color = _darken_hex(base_color, 0.82)
-
-        # Individual points
-        if not hide_shots:
-            if color_by_date:
-                dates = sorted(normal_data["date_str"].unique())
-                date_colors = px.colors.qualitative.Pastel
-                for j, d in enumerate(dates):
-                    dd = normal_data[normal_data["date_str"] == d]
-                    fig3.add_trace(go.Scatter(
-                        x=dd["offline_yd"], y=dd["carry_yd"], mode="markers",
-                        name=d, showlegend=False,
-                        text=dd["hover_text"],
-                        hovertemplate="%{text}<extra></extra>",
-                        marker=dict(size=10, color=date_colors[j % len(date_colors)],
-                                    opacity=0.75, line=dict(width=1, color="white")),
-                    ))
+        p3d1, p3d2, p3d3 = st.columns([1, 1, 1])
+        with p3d1:
+            show_ellipse = st.checkbox("Show each club's dispersion", value=False, key="disp_ellipse")
+            hide_shots   = st.checkbox("Remove individual shots", value=False, key="disp_hide_shots")
+        with p3d2:
+            single_club = len(disp_clubs) == 1
+            show_proximity = st.checkbox(
+                "Show proximity circles" + ("" if single_club else " (single club only)"),
+                value=False, key="disp_prox",
+                disabled=not single_club,
+            )
+            if not single_club:
+                st.caption("Select one club to enable proximity circles.")
+        with p3d3:
+            if show_proximity or show_ellipse:
+                intended_carry = st.number_input("Intended carry (yd)", min_value=0, max_value=400,
+                                                 value=0, step=5, key="disp_target")
+                disp_level = st.slider("Level", 1, 12, value=5, key="disp_level")
             else:
-                fig3.add_trace(go.Scatter(
-                    x=normal_data["offline_yd"], y=normal_data["carry_yd"], mode="markers",
-                    name=club, showlegend=False,
-                    text=normal_data["hover_text"],
-                    hovertemplate="%{text}<extra></extra>",
-                    marker=dict(size=10, color=base_color, opacity=0.75,
-                                line=dict(width=1, color="white")),
-                ))
+                intended_carry = 0
+                disp_level = 5
 
-            # Outlier overlay
-            if not exclude_outliers and not outlier_data.empty:
-                fig3.add_trace(go.Scatter(
-                    x=outlier_data["offline_yd"], y=outlier_data["carry_yd"],
-                    mode="markers", name=f"{club} outlier", showlegend=False,
-                    marker=dict(size=10, color="red", symbol="x", line=dict(width=2, color="darkred")),
-                    hovertemplate="<b>Outlier</b><br>Offline: %{x:.1f} yd<br>Carry: %{y:.1f} yd<extra></extra>",
-                ))
+        disp_plot_df = disp_df[disp_df["club"].isin(disp_clubs)].copy()
+        disp_plot_df["date_str"] = disp_plot_df["session_date"].dt.strftime("%b %d, %Y")
 
-        # Average dot — in legend with just club name
-        avg_carry   = club_data["carry_yd"].mean()
-        avg_offline = club_data["offline_yd"].mean()
-        fig3.add_trace(go.Scatter(
-            x=[avg_offline], y=[avg_carry], mode="markers",
-            name=club, showlegend=True,
-            marker=dict(size=14, color=dark_color, opacity=1.0, symbol="circle",
-                        line=dict(width=2, color="black")),
-            hovertemplate=f"<b>{club} avg</b><br>Offline: {avg_offline:.1f} yd<br>Carry: {avg_carry:.1f} yd<extra></extra>",
-        ))
+        # Proximity to hole if intended carry set
+        if intended_carry > 0:
+            import math as _math
+            def _prox(row):
+                if pd.isna(row["carry_yd"]) or pd.isna(row["offline_yd"]):
+                    return None
+                return _math.sqrt(row["offline_yd"]**2 + (intended_carry - row["carry_yd"])**2) * 3
+            disp_plot_df["proximity_ft"] = disp_plot_df.apply(_prox, axis=1)
+            def _fmt_prox(ft):
+                if ft is None or pd.isna(ft): return "—"
+                total_in = ft * 12
+                feet = int(total_in // 12)
+                inches = round(total_in % 12)
+                if inches == 12: feet += 1; inches = 0
+                return str(feet) + "\'" + str(inches) + "\""
+            disp_plot_df["prox_str"] = disp_plot_df["proximity_ft"].apply(_fmt_prox)
+        else:
+            disp_plot_df["prox_str"] = None
 
-    # Intended carry line
-    if intended_carry > 0:
-        fig3.add_hline(y=intended_carry, line_color="#333333", line_width=2,
-                       annotation_text=f"Target: {intended_carry} yd",
-                       annotation_position="right",
-                       annotation_font=dict(color="#333333", size=12))
+        # Symmetric x-axis around 0
+        max_offline = disp_plot_df["offline_yd"].abs().max()
+        x_range = [-max_offline * 1.2 - 1, max_offline * 1.2 + 1]
 
-    import numpy as np
-    import math
-    from scipy import stats
+        has_prox = intended_carry > 0 and "prox_str" in disp_plot_df.columns
 
-    # 95% ellipse — one per club
-    if show_ellipse:
-        theta = np.linspace(0, 2 * np.pi, 200)
+        def _build_disp_hover(row):
+            s = (f"<b>{row['club']}</b><br>"
+                 f"Carry: {row['carry_yd']:.1f} yd<br>"
+                 f"Offline: {row['offline_yd']:.1f} yd")
+            if has_prox and row.get("prox_str"):
+                s += f"<br>Proximity: {row['prox_str']}"
+            return s
+
+        disp_plot_df["hover_text"] = disp_plot_df.apply(_build_disp_hover, axis=1)
+
+        # Build figure manually for coordinated per-club colors
+        BASE_COLORS = px.colors.qualitative.Plotly
+        fig3 = go.Figure()
+        fig3.update_layout(title=f"Carry Dispersion — {', '.join(disp_clubs)}")
+
         for i, club in enumerate(disp_clubs):
             club_data = disp_plot_df[disp_plot_df["club"] == club]
-            valid = club_data[["carry_yd", "offline_yd"]].dropna()
-            if len(valid) < 3:
-                continue
-            carry_vals   = valid["carry_yd"].values
-            offline_vals = valid["offline_yd"].values
-            avg_carry_e  = carry_vals.mean()
-            avg_offline_e = offline_vals.mean()
-            cov = np.cov(offline_vals, carry_vals)
-            chi2_95 = stats.chi2.ppf(0.95, df=2)
-            eigvals, eigvecs = np.linalg.eigh(cov)
-            order = np.argsort(eigvals)[::-1]
-            eigvals, eigvecs = eigvals[order], eigvecs[:, order]
-            angle = np.arctan2(eigvecs[1, 0], eigvecs[0, 0])
-            a = np.sqrt(chi2_95 * max(eigvals[0], 0))
-            b = np.sqrt(chi2_95 * max(eigvals[1], 0))
-            ellipse_x = (a * np.cos(theta) * np.cos(angle)
-                         - b * np.sin(theta) * np.sin(angle) + avg_offline_e)
-            ellipse_y = (a * np.cos(theta) * np.sin(angle)
-                         + b * np.sin(theta) * np.cos(angle) + avg_carry_e)
-            ellipse_color = _darken_hex(BASE_COLORS[i % len(BASE_COLORS)], 0.7)
+            normal_data  = club_data[~club_data["_is_outlier"]] if "_is_outlier" in club_data.columns else club_data
+            outlier_data = club_data[club_data["_is_outlier"]]  if "_is_outlier" in club_data.columns else club_data.iloc[0:0]
+
+            base_color = BASE_COLORS[i % len(BASE_COLORS)]
+            dark_color = _darken_hex(base_color, 0.82)
+
+            # Individual points
+            if not hide_shots:
+                if color_by_date:
+                    dates = sorted(normal_data["date_str"].unique())
+                    date_colors = px.colors.qualitative.Pastel
+                    for j, d in enumerate(dates):
+                        dd = normal_data[normal_data["date_str"] == d]
+                        fig3.add_trace(go.Scatter(
+                            x=dd["offline_yd"], y=dd["carry_yd"], mode="markers",
+                            name=d, showlegend=False,
+                            text=dd["hover_text"],
+                            hovertemplate="%{text}<extra></extra>",
+                            marker=dict(size=10, color=date_colors[j % len(date_colors)],
+                                        opacity=0.75, line=dict(width=1, color="white")),
+                        ))
+                else:
+                    fig3.add_trace(go.Scatter(
+                        x=normal_data["offline_yd"], y=normal_data["carry_yd"], mode="markers",
+                        name=club, showlegend=False,
+                        text=normal_data["hover_text"],
+                        hovertemplate="%{text}<extra></extra>",
+                        marker=dict(size=10, color=base_color, opacity=0.75,
+                                    line=dict(width=1, color="white")),
+                    ))
+
+                # Outlier overlay
+                if not exclude_outliers and not outlier_data.empty:
+                    fig3.add_trace(go.Scatter(
+                        x=outlier_data["offline_yd"], y=outlier_data["carry_yd"],
+                        mode="markers", name=f"{club} outlier", showlegend=False,
+                        marker=dict(size=10, color="red", symbol="x", line=dict(width=2, color="darkred")),
+                        hovertemplate="<b>Outlier</b><br>Offline: %{x:.1f} yd<br>Carry: %{y:.1f} yd<extra></extra>",
+                    ))
+
+            # Average dot — in legend with just club name
+            avg_carry   = club_data["carry_yd"].mean()
+            avg_offline = club_data["offline_yd"].mean()
             fig3.add_trace(go.Scatter(
-                x=ellipse_x, y=ellipse_y,
-                mode="lines", name=f"{club} 95% ellipse", showlegend=False,
-                line=dict(color=ellipse_color, width=2),
-                hoverinfo="skip",
+                x=[avg_offline], y=[avg_carry], mode="markers",
+                name=club, showlegend=True,
+                marker=dict(size=14, color=dark_color, opacity=1.0, symbol="circle",
+                            line=dict(width=2, color="black")),
+                hovertemplate=f"<b>{club} avg</b><br>Offline: {avg_offline:.1f} yd<br>Carry: {avg_carry:.1f} yd<extra></extra>",
             ))
 
-    # Proximity circles — single club only
-    if show_proximity and single_club and intended_carry > 0:
-        import sys, os
-        sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-        from data.tour_targets import get_tour_target, get_level_multipliers
+        # Intended carry line
+        if intended_carry > 0:
+            fig3.add_hline(y=intended_carry, line_color="#333333", line_width=2,
+                           annotation_text=f"Target: {intended_carry} yd",
+                           annotation_position="right",
+                           annotation_font=dict(color="#333333", size=12))
 
-        prox_ft, _, _ = get_tour_target(intended_carry)
-        _, prox_mult = get_level_multipliers(disp_level)
-        if prox_ft is not None and prox_mult is not None:
-            target_prox_ft = prox_ft * prox_mult
-            target_prox_yd = target_prox_ft / 3
+        import numpy as np
+        import math
+        from scipy import stats
+
+        # 95% ellipse — one per club
+        if show_ellipse:
             theta = np.linspace(0, 2 * np.pi, 200)
-
-            # Target circle — centered on intended carry (blue dashed)
-            fig3.add_trace(go.Scatter(
-                x=target_prox_yd * np.cos(theta),
-                y=intended_carry + target_prox_yd * np.sin(theta),
-                mode="lines", name=f"Target ({target_prox_ft:.1f}ft)",
-                line=dict(color="#2E75B6", width=2, dash="dash"),
-                hoverinfo="skip",
-            ))
-
-            valid = disp_plot_df[disp_plot_df["club"] == disp_clubs[0]][["carry_yd","offline_yd"]].dropna()
-            if not valid.empty:
+            for i, club in enumerate(disp_clubs):
+                club_data = disp_plot_df[disp_plot_df["club"] == club]
+                valid = club_data[["carry_yd", "offline_yd"]].dropna()
+                if len(valid) < 3:
+                    continue
                 carry_vals   = valid["carry_yd"].values
                 offline_vals = valid["offline_yd"].values
-                proximities  = [math.sqrt(o**2 + (intended_carry - c)**2)
-                                for c, o in zip(carry_vals, offline_vals)]
-                avg_prox_yd  = sum(proximities) / len(proximities)
-                avg_prox_ft  = avg_prox_yd * 3
-                # Actual avg proximity circle — centered on intended carry (orange dotted)
+                avg_carry_e  = carry_vals.mean()
+                avg_offline_e = offline_vals.mean()
+                cov = np.cov(offline_vals, carry_vals)
+                chi2_95 = stats.chi2.ppf(0.95, df=2)
+                eigvals, eigvecs = np.linalg.eigh(cov)
+                order = np.argsort(eigvals)[::-1]
+                eigvals, eigvecs = eigvals[order], eigvecs[:, order]
+                angle = np.arctan2(eigvecs[1, 0], eigvecs[0, 0])
+                a = np.sqrt(chi2_95 * max(eigvals[0], 0))
+                b = np.sqrt(chi2_95 * max(eigvals[1], 0))
+                ellipse_x = (a * np.cos(theta) * np.cos(angle)
+                             - b * np.sin(theta) * np.sin(angle) + avg_offline_e)
+                ellipse_y = (a * np.cos(theta) * np.sin(angle)
+                             + b * np.sin(theta) * np.cos(angle) + avg_carry_e)
+                ellipse_color = _darken_hex(BASE_COLORS[i % len(BASE_COLORS)], 0.7)
                 fig3.add_trace(go.Scatter(
-                    x=avg_prox_yd * np.cos(theta),
-                    y=intended_carry + avg_prox_yd * np.sin(theta),
-                    mode="lines", name=f"Actual avg ({avg_prox_ft:.1f}ft)",
-                    line=dict(color="#E07B39", width=2, dash="dot"),
+                    x=ellipse_x, y=ellipse_y,
+                    mode="lines", name=f"{club} 95% ellipse", showlegend=False,
+                    line=dict(color=ellipse_color, width=2),
                     hoverinfo="skip",
                 ))
 
-    # Always center x at 0
-    fig3.add_vline(x=0, line_color="#AAAAAA", line_width=1.5)
+        # Proximity circles — single club only
+        if show_proximity and single_club and intended_carry > 0:
+            import sys, os
+            sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+            from data.tour_targets import get_tour_target, get_level_multipliers
 
-    fig3.update_layout(
-        xaxis_title="← Left  |  Right →  (yd)",
-        yaxis_title="Carry (yd)",
-        plot_bgcolor="white", paper_bgcolor="white",
-        xaxis=dict(showgrid=False, zeroline=False, range=x_range),
-        yaxis=dict(gridcolor="#EEEEEE"),
-        height=500, legend_title="Club",
-    )
-    st.plotly_chart(fig3, use_container_width=True)
+            prox_ft, _, _ = get_tour_target(intended_carry)
+            _, prox_mult = get_level_multipliers(disp_level)
+            if prox_ft is not None and prox_mult is not None:
+                target_prox_ft = prox_ft * prox_mult
+                target_prox_yd = target_prox_ft / 3
+                theta = np.linspace(0, 2 * np.pi, 200)
 
-
-# ── PLOTS 3 & 4: Face Impact + Club Path vs Face Angle (side by side) ──────
-st.markdown('<p class="section-header">Strike Location &nbsp;&nbsp;|&nbsp;&nbsp; Delivery</p>', unsafe_allow_html=True)
-
-# Shared club filter
-_all_clubs_34 = sorted(df["club"].dropna().unique().tolist())
-impact_clubs = st.multiselect("Club(s)", _all_clubs_34,
-                               default=[_all_clubs_34[0]] if _all_clubs_34 else [],
-                               key="impact_club")
-
-_col_impact, _col_path = st.columns(2)
-
-with _col_impact:
-    impact_df = df[df["club"].isin(impact_clubs)][["club", "face_impact_horizontal_mm", "face_impact_vertical_mm"]].dropna()
-
-    if impact_df.empty:
-        st.info("No strike location data available.")
-    else:
-        impact_plot_df = impact_df.copy()
-
-        import numpy as np
-        fig2 = go.Figure()
-
-        # Club face outline — circle with 20mm radius
-        theta = np.linspace(0, 2 * np.pi, 200)
-        fig2.add_trace(go.Scatter(
-            x=20 * np.cos(theta), y=20 * np.sin(theta),
-            mode="lines", line=dict(color="#AAAAAA", width=2),
-            fill="toself", fillcolor="rgba(240,240,240,0.3)",
-            showlegend=False, hoverinfo="skip",
-        ))
-        # Crosshairs
-        fig2.add_shape(type="line", x0=0, x1=0, y0=-20, y1=20,
-                       line=dict(color="#CCCCCC", width=1, dash="dash"))
-        fig2.add_shape(type="line", x0=-20, x1=20, y0=0, y1=0,
-                       line=dict(color="#CCCCCC", width=1, dash="dash"))
-
-        colors = px.colors.qualitative.Plotly
-        for i, club in enumerate(impact_clubs):
-            club_df = impact_plot_df[impact_plot_df["club"] == club]
-            color = colors[i % len(colors)]
-            avg_h = club_df["face_impact_horizontal_mm"].mean()
-            avg_v = club_df["face_impact_vertical_mm"].mean()
-
-            # Individual shots — hidden from legend
-            fig2.add_trace(go.Scatter(
-                x=club_df["face_impact_horizontal_mm"],
-                y=club_df["face_impact_vertical_mm"],
-                mode="markers", name=club, showlegend=False,
-                marker=dict(size=11, color=color, opacity=0.5, line=dict(width=1, color="white")),
-                hovertemplate=f"<b>{club}</b><br>Horizontal: %{{x:.1f}} mm<br>Vertical: %{{y:.1f}} mm<extra></extra>",
-            ))
-            # Average dot — in legend with club name, avg size/color
-            fig2.add_trace(go.Scatter(
-                x=[avg_h], y=[avg_v],
-                mode="markers", name=club, showlegend=True,
-                marker=dict(size=18, color=color, symbol="circle",
-                            line=dict(width=2, color="black")),
-                hovertemplate=f"<b>{club} avg</b><br>Horizontal: {avg_h:.1f} mm<br>Vertical: {avg_v:.1f} mm<extra></extra>",
-            ))
-
-        fig2.update_layout(
-            title=f"Strike Location — {', '.join(impact_clubs)}",
-            xaxis_title="← Heel  |  Toe →  (mm)",
-            yaxis_title="← Low  |  High →  (mm)",
-            xaxis=dict(range=[-28, 28], showgrid=False, zeroline=False),
-            yaxis=dict(range=[-28, 28], showgrid=False, zeroline=False, scaleanchor="x"),
-            plot_bgcolor="white", paper_bgcolor="white",
-            height=500, legend_title="Club",
-        )
-        st.plotly_chart(fig2, use_container_width=False)
-
-
-with _col_path:
-    has_path = df["club_path_deg"].notna().any()
-    has_face = df["face_angle_deg"].notna().any() if "face_angle_deg" in df.columns else False
-
-    if not has_path:
-        st.info("No club path data available.")
-    elif not has_face:
-        # ── Histogram: club path distribution (bin=1°) ───────────────────────
-        density_df = df[["club", "club_path_deg"]].dropna(subset=["club_path_deg"])
-        density_plot_df = density_df[density_df["club"].isin(impact_clubs)]
-        fig4 = go.Figure()
-        BASE_COLORS_D = px.colors.qualitative.Plotly
-
-        for i, club in enumerate(impact_clubs):
-            cdf = density_plot_df[density_plot_df["club"] == club]["club_path_deg"].dropna()
-            if cdf.empty:
-                continue
-            color = BASE_COLORS_D[i % len(BASE_COLORS_D)]
-            fig4.add_trace(go.Histogram(
-                x=cdf, name=club,
-                xbins=dict(start=cdf.min() - 0.5, end=cdf.max() + 0.5, size=1),
-                marker_color=color, opacity=0.6,
-            ))
-            fig4.add_vline(x=float(cdf.mean()), line_color=color, line_width=2,
-                           line_dash="dash",
-                           annotation_text=f"{cdf.mean():.1f}°",
-                           annotation_position="top")
-
-        fig4.add_vline(x=0, line_color="#AAAAAA", line_width=1.5)
-        fig4.update_layout(
-            barmode="overlay",
-            title=f"Club Path Distribution — {', '.join(impact_clubs)}",
-            xaxis_title="Club Path (°)<br><sub>← Out-to-In  |  In-to-Out →</sub>",
-            yaxis_title="Count",
-            plot_bgcolor="white", paper_bgcolor="white",
-            xaxis=dict(showgrid=False, zeroline=False),
-            yaxis=dict(gridcolor="#EEEEEE", zeroline=False),
-            height=550, legend_title="Club",
-        )
-        st.plotly_chart(fig4, use_container_width=True)
-
-    else:
-        # ── Scatter: club path vs face angle ─────────────────────────────────
-        path_cols = ["club", "club_path_deg", "face_angle_deg", "smash_factor",
-                     "club_speed_mph", "ball_speed_mph", "angle_of_attack_deg", "dynamic_loft_deg",
-                     "launch_angle_deg", "total_spin_rpm", "carry_yd", "offline_yd", "total_yd",
-                     "face_impact_horizontal_mm", "face_impact_vertical_mm", "_is_outlier"]
-        path_df = df[[c for c in path_cols if c in df.columns]].dropna(subset=["club_path_deg", "face_angle_deg"]).copy()
-
-        path_df["smash"] = path_df["smash_factor"]
-        mask = path_df["smash"].isna() & path_df["ball_speed_mph"].notna() & path_df["club_speed_mph"].notna()
-        path_df.loc[mask, "smash"] = path_df.loc[mask, "ball_speed_mph"] / path_df.loc[mask, "club_speed_mph"]
-
-        path_clubs = impact_clubs
-        path_plot_df = path_df[path_df["club"].isin(path_clubs)].copy()
-
-        def fmt(val, decimals=1, suffix=""):
-            return f"{val:.{decimals}f}{suffix}" if pd.notna(val) else "—"
-
-        path_plot_df["hover"] = path_plot_df.apply(lambda r: (
-            f"<b>{r['club']}</b><br>"
-            f"Club Speed: {fmt(r['club_speed_mph'], 0)} mph<br>"
-            f"Angle of Attack: {fmt(r['angle_of_attack_deg'])}°<br>"
-            f"Club Path: {fmt(r['club_path_deg'])}°<br>"
-            f"Face Angle: {fmt(r['face_angle_deg'])}°<br>"
-            f"Dynamic Loft: {fmt(r['dynamic_loft_deg'], 0)}°<br>"
-            f"Impact H: {fmt(r['face_impact_horizontal_mm'], 0)} mm<br>"
-            f"Impact V: {fmt(r['face_impact_vertical_mm'], 0)} mm<br>"
-            f"Ball Speed: {fmt(r['ball_speed_mph'], 0)} mph<br>"
-            f"Smash Factor: {fmt(r['smash'], 2)}<br>"
-            f"Launch Angle: {fmt(r['launch_angle_deg'], 0)}°<br>"
-            f"Spin Rate: {fmt(r['total_spin_rpm'], 0)} rpm<br>"
-            f"Carry: {fmt(r['carry_yd'], 0)} yd<br>"
-            f"Offline: {fmt(r['offline_yd'], 0)} yd<br>"
-            f"Total: {fmt(r['total_yd'], 0)} yd"
-        ), axis=1)
-
-        fig4 = go.Figure()
-        SHAPES = ["circle", "square", "diamond", "triangle-up", "cross",
-                  "star", "hexagon", "pentagon", "triangle-down", "x"]
-        all_aoa = path_plot_df["angle_of_attack_deg"].dropna()
-        aoa_min = all_aoa.min() if not all_aoa.empty else -10.0
-        aoa_max = all_aoa.max() if not all_aoa.empty else 5.0
-
-        for i, club in enumerate(path_clubs):
-            cdf = path_plot_df[path_plot_df["club"] == club].copy()
-            shape = SHAPES[i % len(SHAPES)]
-            colorbar_cfg = dict(title=dict(text="Angle of Attack (°)", font=dict(size=13)),
-                                x=1.02, y=1, len=0.5, yanchor="top") if i == 0 else {}
-            fig4.add_trace(go.Scatter(
-                x=cdf["club_path_deg"], y=cdf["face_angle_deg"],
-                mode="markers", name=club,
-                text=cdf["hover"], hovertemplate="%{text}<extra></extra>",
-                marker=dict(size=14, symbol=shape,
-                            color=cdf["angle_of_attack_deg"],
-                            colorscale="RdYlGn", cmin=aoa_min, cmax=aoa_max,
-                            showscale=(i == 0),
-                            **{"colorbar": colorbar_cfg} if colorbar_cfg else {},
-                            line=dict(width=1, color="white"), opacity=0.85)
-            ))
-
-        if not exclude_outliers and "_is_outlier" in path_plot_df.columns:
-            path_out = path_plot_df[path_plot_df["_is_outlier"]]
-            if not path_out.empty:
-                fig4.add_trace(go.Scatter(
-                    x=path_out["club_path_deg"], y=path_out["face_angle_deg"],
-                    mode="markers", name="Outlier",
-                    marker=dict(size=12, color="red", symbol="x", line=dict(width=2, color="darkred")),
-                    hovertemplate="<b>Outlier</b><br>Path: %{x:.1f}°<br>Face: %{y:.1f}°<extra></extra>",
+                # Target circle — centered on intended carry (blue dashed)
+                fig3.add_trace(go.Scatter(
+                    x=target_prox_yd * np.cos(theta),
+                    y=intended_carry + target_prox_yd * np.sin(theta),
+                    mode="lines", name=f"Target ({target_prox_ft:.1f}ft)",
+                    line=dict(color="#2E75B6", width=2, dash="dash"),
+                    hoverinfo="skip",
                 ))
 
-        fig4.add_vline(x=0, line_color="#CCCCCC", line_width=1, line_dash="dash")
-        fig4.add_hline(y=0, line_color="#CCCCCC", line_width=1, line_dash="dash")
-        axis_range = max(abs(path_plot_df["club_path_deg"]).max(),
-                         abs(path_plot_df["face_angle_deg"]).max()) * 1.2 + 1
-        fig4.update_layout(
-            title=f"Club Path vs Face Angle — {', '.join(path_clubs)}",
-            xaxis_title="Club Path (°)<br><sub>← Out-to-In  |  In-to-Out →</sub>",
-            yaxis_title="Face Angle (°)<br><sub>← Closed  |  Open →</sub>",
+                valid = disp_plot_df[disp_plot_df["club"] == disp_clubs[0]][["carry_yd","offline_yd"]].dropna()
+                if not valid.empty:
+                    carry_vals   = valid["carry_yd"].values
+                    offline_vals = valid["offline_yd"].values
+                    proximities  = [math.sqrt(o**2 + (intended_carry - c)**2)
+                                    for c, o in zip(carry_vals, offline_vals)]
+                    avg_prox_yd  = sum(proximities) / len(proximities)
+                    avg_prox_ft  = avg_prox_yd * 3
+                    # Actual avg proximity circle — centered on intended carry (orange dotted)
+                    fig3.add_trace(go.Scatter(
+                        x=avg_prox_yd * np.cos(theta),
+                        y=intended_carry + avg_prox_yd * np.sin(theta),
+                        mode="lines", name=f"Actual avg ({avg_prox_ft:.1f}ft)",
+                        line=dict(color="#E07B39", width=2, dash="dot"),
+                        hoverinfo="skip",
+                    ))
+
+        # Always center x at 0
+        fig3.add_vline(x=0, line_color="#AAAAAA", line_width=1.5)
+
+        fig3.update_layout(
+            xaxis_title="← Left  |  Right →  (yd)",
+            yaxis_title="Carry (yd)",
             plot_bgcolor="white", paper_bgcolor="white",
-            xaxis=dict(showgrid=False, zeroline=False, range=[-axis_range, axis_range]),
-            yaxis=dict(gridcolor="#EEEEEE", zeroline=False, range=[-axis_range, axis_range]),
-            height=550,
-            legend=dict(
-                title=dict(text="Club", font=dict(size=13)),
-                x=1.02,
-                y=0.5,
-                yanchor="top"
-            ),
-            coloraxis_colorbar=dict(x=1.02, len=0.5, yanchor="top", y=1),
+            xaxis=dict(showgrid=False, zeroline=False, range=x_range),
+            yaxis=dict(gridcolor="#EEEEEE"),
+            height=500, legend_title="Club",
         )
-        st.plotly_chart(fig4, use_container_width=True)
+        st.plotly_chart(fig3, use_container_width=True)
+
+
+
+
+def render_delivery_impact():
+    # ── PLOTS 3 & 4: Face Impact + Club Path vs Face Angle (side by side) ──────
+    st.markdown('<p class="section-header">Strike Location &nbsp;&nbsp;|&nbsp;&nbsp; Delivery</p>', unsafe_allow_html=True)
+
+    # Shared club filter
+    _all_clubs_34 = sorted(df["club"].dropna().unique().tolist())
+    impact_clubs = st.multiselect("Club(s)", _all_clubs_34,
+                                   default=[_all_clubs_34[0]] if _all_clubs_34 else [],
+                                   key="impact_club")
+
+    _col_impact, _col_path = st.columns(2)
+
+    with _col_impact:
+        impact_df = df[df["club"].isin(impact_clubs)][["club", "face_impact_horizontal_mm", "face_impact_vertical_mm"]].dropna()
+
+        if impact_df.empty:
+            st.info("No strike location data available.")
+        else:
+            impact_plot_df = impact_df.copy()
+
+            import numpy as np
+            fig2 = go.Figure()
+
+            # Club face outline — circle with 20mm radius
+            theta = np.linspace(0, 2 * np.pi, 200)
+            fig2.add_trace(go.Scatter(
+                x=20 * np.cos(theta), y=20 * np.sin(theta),
+                mode="lines", line=dict(color="#AAAAAA", width=2),
+                fill="toself", fillcolor="rgba(240,240,240,0.3)",
+                showlegend=False, hoverinfo="skip",
+            ))
+            # Crosshairs
+            fig2.add_shape(type="line", x0=0, x1=0, y0=-20, y1=20,
+                           line=dict(color="#CCCCCC", width=1, dash="dash"))
+            fig2.add_shape(type="line", x0=-20, x1=20, y0=0, y1=0,
+                           line=dict(color="#CCCCCC", width=1, dash="dash"))
+
+            colors = px.colors.qualitative.Plotly
+            for i, club in enumerate(impact_clubs):
+                club_df = impact_plot_df[impact_plot_df["club"] == club]
+                color = colors[i % len(colors)]
+                avg_h = club_df["face_impact_horizontal_mm"].mean()
+                avg_v = club_df["face_impact_vertical_mm"].mean()
+
+                # Individual shots — hidden from legend
+                fig2.add_trace(go.Scatter(
+                    x=club_df["face_impact_horizontal_mm"],
+                    y=club_df["face_impact_vertical_mm"],
+                    mode="markers", name=club, showlegend=False,
+                    marker=dict(size=11, color=color, opacity=0.5, line=dict(width=1, color="white")),
+                    hovertemplate=f"<b>{club}</b><br>Horizontal: %{{x:.1f}} mm<br>Vertical: %{{y:.1f}} mm<extra></extra>",
+                ))
+                # Average dot — in legend with club name, avg size/color
+                fig2.add_trace(go.Scatter(
+                    x=[avg_h], y=[avg_v],
+                    mode="markers", name=club, showlegend=True,
+                    marker=dict(size=18, color=color, symbol="circle",
+                                line=dict(width=2, color="black")),
+                    hovertemplate=f"<b>{club} avg</b><br>Horizontal: {avg_h:.1f} mm<br>Vertical: {avg_v:.1f} mm<extra></extra>",
+                ))
+
+            fig2.update_layout(
+                title=f"Strike Location — {', '.join(impact_clubs)}",
+                xaxis_title="← Heel  |  Toe →  (mm)",
+                yaxis_title="← Low  |  High →  (mm)",
+                xaxis=dict(range=[-28, 28], showgrid=False, zeroline=False),
+                yaxis=dict(range=[-28, 28], showgrid=False, zeroline=False, scaleanchor="x"),
+                plot_bgcolor="white", paper_bgcolor="white",
+                height=500, legend_title="Club",
+            )
+            st.plotly_chart(fig2, use_container_width=False)
+
+
+    with _col_path:
+        has_path = df["club_path_deg"].notna().any()
+        has_face = df["face_angle_deg"].notna().any() if "face_angle_deg" in df.columns else False
+
+        if not has_path:
+            st.info("No club path data available.")
+        elif not has_face:
+            # ── Histogram: club path distribution (bin=1°) ───────────────────────
+            density_df = df[["club", "club_path_deg"]].dropna(subset=["club_path_deg"])
+            density_plot_df = density_df[density_df["club"].isin(impact_clubs)]
+            fig4 = go.Figure()
+            BASE_COLORS_D = px.colors.qualitative.Plotly
+
+            for i, club in enumerate(impact_clubs):
+                cdf = density_plot_df[density_plot_df["club"] == club]["club_path_deg"].dropna()
+                if cdf.empty:
+                    continue
+                color = BASE_COLORS_D[i % len(BASE_COLORS_D)]
+                fig4.add_trace(go.Histogram(
+                    x=cdf, name=club,
+                    xbins=dict(start=cdf.min() - 0.5, end=cdf.max() + 0.5, size=1),
+                    marker_color=color, opacity=0.6,
+                ))
+                fig4.add_vline(x=float(cdf.mean()), line_color=color, line_width=2,
+                               line_dash="dash",
+                               annotation_text=f"{cdf.mean():.1f}°",
+                               annotation_position="top")
+
+            fig4.add_vline(x=0, line_color="#AAAAAA", line_width=1.5)
+            fig4.update_layout(
+                barmode="overlay",
+                title=f"Club Path Distribution — {', '.join(impact_clubs)}",
+                xaxis_title="Club Path (°)<br><sub>← Out-to-In  |  In-to-Out →</sub>",
+                yaxis_title="Count",
+                plot_bgcolor="white", paper_bgcolor="white",
+                xaxis=dict(showgrid=False, zeroline=False),
+                yaxis=dict(gridcolor="#EEEEEE", zeroline=False),
+                height=550, legend_title="Club",
+            )
+            st.plotly_chart(fig4, use_container_width=True)
+
+        else:
+            # ── Scatter: club path vs face angle ─────────────────────────────────
+            path_cols = ["club", "club_path_deg", "face_angle_deg", "smash_factor",
+                         "club_speed_mph", "ball_speed_mph", "angle_of_attack_deg", "dynamic_loft_deg",
+                         "launch_angle_deg", "total_spin_rpm", "carry_yd", "offline_yd", "total_yd",
+                         "face_impact_horizontal_mm", "face_impact_vertical_mm", "_is_outlier"]
+            path_df = df[[c for c in path_cols if c in df.columns]].dropna(subset=["club_path_deg", "face_angle_deg"]).copy()
+
+            path_df["smash"] = path_df["smash_factor"]
+            mask = path_df["smash"].isna() & path_df["ball_speed_mph"].notna() & path_df["club_speed_mph"].notna()
+            path_df.loc[mask, "smash"] = path_df.loc[mask, "ball_speed_mph"] / path_df.loc[mask, "club_speed_mph"]
+
+            path_clubs = impact_clubs
+            path_plot_df = path_df[path_df["club"].isin(path_clubs)].copy()
+
+            def fmt(val, decimals=1, suffix=""):
+                return f"{val:.{decimals}f}{suffix}" if pd.notna(val) else "—"
+
+            path_plot_df["hover"] = path_plot_df.apply(lambda r: (
+                f"<b>{r['club']}</b><br>"
+                f"Club Speed: {fmt(r['club_speed_mph'], 0)} mph<br>"
+                f"Angle of Attack: {fmt(r['angle_of_attack_deg'])}°<br>"
+                f"Club Path: {fmt(r['club_path_deg'])}°<br>"
+                f"Face Angle: {fmt(r['face_angle_deg'])}°<br>"
+                f"Dynamic Loft: {fmt(r['dynamic_loft_deg'], 0)}°<br>"
+                f"Impact H: {fmt(r['face_impact_horizontal_mm'], 0)} mm<br>"
+                f"Impact V: {fmt(r['face_impact_vertical_mm'], 0)} mm<br>"
+                f"Ball Speed: {fmt(r['ball_speed_mph'], 0)} mph<br>"
+                f"Smash Factor: {fmt(r['smash'], 2)}<br>"
+                f"Launch Angle: {fmt(r['launch_angle_deg'], 0)}°<br>"
+                f"Spin Rate: {fmt(r['total_spin_rpm'], 0)} rpm<br>"
+                f"Carry: {fmt(r['carry_yd'], 0)} yd<br>"
+                f"Offline: {fmt(r['offline_yd'], 0)} yd<br>"
+                f"Total: {fmt(r['total_yd'], 0)} yd"
+            ), axis=1)
+
+            fig4 = go.Figure()
+            SHAPES = ["circle", "square", "diamond", "triangle-up", "cross",
+                      "star", "hexagon", "pentagon", "triangle-down", "x"]
+            all_aoa = path_plot_df["angle_of_attack_deg"].dropna()
+            aoa_min = all_aoa.min() if not all_aoa.empty else -10.0
+            aoa_max = all_aoa.max() if not all_aoa.empty else 5.0
+
+            for i, club in enumerate(path_clubs):
+                cdf = path_plot_df[path_plot_df["club"] == club].copy()
+                shape = SHAPES[i % len(SHAPES)]
+                colorbar_cfg = dict(title=dict(text="Angle of Attack (°)", font=dict(size=13)),
+                                    x=1.02, y=1, len=0.5, yanchor="top") if i == 0 else {}
+                fig4.add_trace(go.Scatter(
+                    x=cdf["club_path_deg"], y=cdf["face_angle_deg"],
+                    mode="markers", name=club,
+                    text=cdf["hover"], hovertemplate="%{text}<extra></extra>",
+                    marker=dict(size=14, symbol=shape,
+                                color=cdf["angle_of_attack_deg"],
+                                colorscale="RdYlGn", cmin=aoa_min, cmax=aoa_max,
+                                showscale=(i == 0),
+                                **{"colorbar": colorbar_cfg} if colorbar_cfg else {},
+                                line=dict(width=1, color="white"), opacity=0.85)
+                ))
+
+            if not exclude_outliers and "_is_outlier" in path_plot_df.columns:
+                path_out = path_plot_df[path_plot_df["_is_outlier"]]
+                if not path_out.empty:
+                    fig4.add_trace(go.Scatter(
+                        x=path_out["club_path_deg"], y=path_out["face_angle_deg"],
+                        mode="markers", name="Outlier",
+                        marker=dict(size=12, color="red", symbol="x", line=dict(width=2, color="darkred")),
+                        hovertemplate="<b>Outlier</b><br>Path: %{x:.1f}°<br>Face: %{y:.1f}°<extra></extra>",
+                    ))
+
+            fig4.add_vline(x=0, line_color="#CCCCCC", line_width=1, line_dash="dash")
+            fig4.add_hline(y=0, line_color="#CCCCCC", line_width=1, line_dash="dash")
+            axis_range = max(abs(path_plot_df["club_path_deg"]).max(),
+                             abs(path_plot_df["face_angle_deg"]).max()) * 1.2 + 1
+            fig4.update_layout(
+                title=f"Club Path vs Face Angle — {', '.join(path_clubs)}",
+                xaxis_title="Club Path (°)<br><sub>← Out-to-In  |  In-to-Out →</sub>",
+                yaxis_title="Face Angle (°)<br><sub>← Closed  |  Open →</sub>",
+                plot_bgcolor="white", paper_bgcolor="white",
+                xaxis=dict(showgrid=False, zeroline=False, range=[-axis_range, axis_range]),
+                yaxis=dict(gridcolor="#EEEEEE", zeroline=False, range=[-axis_range, axis_range]),
+                height=550,
+                legend=dict(
+                    title=dict(text="Club", font=dict(size=13)),
+                    x=1.02,
+                    y=0.5,
+                    yanchor="top"
+                ),
+                coloraxis_colorbar=dict(x=1.02, len=0.5, yanchor="top", y=1),
+            )
+            st.plotly_chart(fig4, use_container_width=True)
+
+
+
+if page == "GOALS":
+    render_goals()
+elif page == "DELIVERY/IMPACT":
+    render_delivery_impact()
+else:
+    render_ball_flight()
+render_metric_by_date(page.split("/")[0].lower().replace(" ", "_"))
