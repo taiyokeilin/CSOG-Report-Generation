@@ -126,10 +126,10 @@ def apply_branding():
     header[data-testid="stHeader"]::before {{
         content: "{PORTAL_NAME}";
         position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-        font-size: 1.15rem; font-weight: 700; color: #1F4E79; letter-spacing: 0.02em;
+        font-size: 1.4rem; font-weight: 700; color: #000000; letter-spacing: 0.02em;
         white-space: nowrap; pointer-events: none;
     }}
-    @media (max-width: 900px) {{ header[data-testid="stHeader"]::before {{ font-size: 0.95rem; }} }}
+    @media (max-width: 900px) {{ header[data-testid="stHeader"]::before {{ font-size: 1.1rem; }} }}
     @media (max-width: 640px) {{ header[data-testid="stHeader"]::before {{ display: none; }} }}
 </style>""", unsafe_allow_html=True)
 
