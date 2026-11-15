@@ -116,6 +116,24 @@ def can_edit(a: dict, player_id: str) -> bool:
     return a["is_coach"] or (a["player_id"] is not None and a["player_id"] == player_id)
 
 
+PORTAL_NAME = "Chicago School of Golf Practice Portal"
+
+
+def apply_branding():
+    """Show the portal name in the top bar, on the same line as Share and the menu, on every page."""
+    st.markdown(f"""
+<style>
+    header[data-testid="stHeader"]::before {{
+        content: "{PORTAL_NAME}";
+        position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+        font-size: 1.15rem; font-weight: 700; color: #1F4E79; letter-spacing: 0.02em;
+        white-space: nowrap; pointer-events: none;
+    }}
+    @media (max-width: 900px) {{ header[data-testid="stHeader"]::before {{ font-size: 0.95rem; }} }}
+    @media (max-width: 640px) {{ header[data-testid="stHeader"]::before {{ display: none; }} }}
+</style>""", unsafe_allow_html=True)
+
+
 def _login_screen():
     st.title("Golf Coaching Portal")
     st.write("Please log in to continue.")
@@ -129,6 +147,7 @@ def _logout_button(key: str):
 
 def require_login(coach_only: bool = False, admin_only: bool = False) -> dict:
     """Stop the page unless a logged-in person with access is present. Returns their access dict."""
+    apply_branding()
     if not getattr(st.user, "is_logged_in", False):
         _login_screen()
 
