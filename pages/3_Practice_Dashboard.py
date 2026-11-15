@@ -4,6 +4,8 @@ import plotly.express as px
 import pandas as pd
 from datetime import date, timedelta
 
+from calculations import compute_club_stats
+
 st.set_page_config(page_title="Practice Dashboard", layout="wide")
 
 from auth import require_login, filter_players
@@ -127,6 +129,70 @@ METRICS = {
 }
 
 
+# ── Radar: share of shots that hit the target ──────────────────
+RADAR_AXES = [  # (label, skill tag on the player's targets, target type)
+    ("Wedge Proximity",           "Wedge Play", "Proximity"),
+    ("Wedge Distance Control",    "Wedge Play", "Distance Control"),
+    ("Approach Proximity",        "Approach",   "Proximity"),
+    ("Approach Distance Control", "Approach",   "Distance Control"),
+    ("Driving Distance",          "Driving",    "Distance"),
+    ("Driving Dispersion",        "Driving",    "Dispersion"),
+]
+
+
+@st.cache_data(ttl=60)
+def targets_as_of(player_id: str, day: str):
+    """The player's targets as they stood on that day (not today's targets)."""
+    return get_supabase().rpc("player_targets_as_of", {"p_player_id": player_id, "p_date": day}).execute().data or []
+
+
+def radar_scores(shots: pd.DataFrame, player_id: str) -> dict:
+    """label -> (successes, attempts) using the targets in force on each session's date."""
+    totals = {label: [0, 0] for label, _, _ in RADAR_AXES}
+    for (day, club), group in shots.groupby([shots["session_date"].dt.strftime("%Y-%m-%d"), "club"]):
+        for t in targets_as_of(player_id, day):
+            if t["club"] != club:
+                continue
+            for label, skill, ttype in RADAR_AXES:
+                if t["skill"] == skill and t["target_type"] == ttype:
+                    stats = compute_club_stats(group, club_name=club, target_type=ttype,
+                                               distance_yd=t.get("distance_yd"), level=int(t["level"]),
+                                               section=skill)
+                    if stats["successes"] is not None:
+                        totals[label][0] += stats["successes"]
+                        totals[label][1] += stats["attempts"]
+    return {k: tuple(v) for k, v in totals.items()}
+
+
+def radar_figure(scores: dict) -> go.Figure:
+    labels, values, hover = [], [], []
+    for label, _, _ in RADAR_AXES:
+        hit, n = scores[label]
+        if n > 0:
+            labels.append(label)
+            values.append(round(100 * hit / n, 1))
+            hover.append(f"{label}<br>{100 * hit / n:.0f}% on target ({hit} of {n} shots)")
+        else:
+            labels.append(f"{label}<br><i>no data</i>")
+            values.append(None)
+            hover.append(f"{label}<br>no data")
+    complete = all(v is not None for v in values)
+    closed = lambda xs: xs + xs[:1]
+    fig = go.Figure(go.Scatterpolar(
+        r=closed(values), theta=closed(labels), mode="lines+markers",
+        fill="toself" if complete else "none", connectgaps=False,
+        line=dict(color="#2E75B6", width=2), marker=dict(size=8, color="#1F4E79"),
+        fillcolor="rgba(46,117,182,0.25)", text=closed(hover), hoverinfo="text",
+    ))
+    fig.update_layout(
+        polar=dict(radialaxis=dict(range=[0, 100], tickvals=[25, 50, 75, 100], ticksuffix="%",
+                                   tickfont=dict(size=9), gridcolor="#D9E2EC"),
+                   angularaxis=dict(tickfont=dict(size=11), rotation=90, direction="clockwise"), bgcolor="rgba(0,0,0,0)"),
+        showlegend=False, margin=dict(l=70, r=70, t=30, b=30), height=380,
+    )
+    return fig
+
+
 # ── SIDEBAR FILTERS ──────────────────────────────────────────────────────────
 players = filter_players(access, load_players())
 if not players:
@@ -149,15 +215,7 @@ with st.sidebar:
         st.info("No shots found for this player in the selected date range.")
         st.stop()
 
-    all_clubs = sorted(df["club"].dropna().unique().tolist())
-    selected_clubs = st.multiselect("Clubs", all_clubs, default=all_clubs)
-    df = df[df["club"].isin(selected_clubs)]
-
-    if df.empty:
-        st.info("No shots for the selected clubs.")
-        st.stop()
-
-    # Outlier detection
+    # Outlier flags are worked out per club and day, so they don't depend on the club filter
     if "ball_speed_mph" in df.columns and df["ball_speed_mph"].notna().any():
         medians = df.groupby(["club", df["session_date"].dt.date])["ball_speed_mph"].transform("median")
         df["_is_outlier"] = (
@@ -167,7 +225,16 @@ with st.sidebar:
     else:
         df["_is_outlier"] = False
 
-    n_outliers = df["_is_outlier"].sum()
+    all_clubs = sorted(df["club"].dropna().unique().tolist())
+    selected_clubs = st.multiselect("Clubs", all_clubs, default=all_clubs)
+    radar_source = df                      # date range + outlier setting apply; the club filter does not
+    df = df[df["club"].isin(selected_clubs)]
+
+    if df.empty:
+        st.info("No shots for the selected clubs.")
+        st.stop()
+
+    n_outliers = int(df["_is_outlier"].sum())
     exclude_outliers = st.checkbox(
         f"Exclude outliers ({n_outliers} shots ±15% from median ball speed)",
         value=False,
@@ -175,10 +242,38 @@ with st.sidebar:
     )
     if exclude_outliers:
         df = df[~df["_is_outlier"]].copy()
+        radar_source = radar_source[~radar_source["_is_outlier"]]
 
-    st.caption(f"**{len(df):,} shots** · {df['session_date'].dt.date.nunique()} sessions · {df['club'].nunique()} clubs" +
-               (f" · {n_outliers} excluded" if exclude_outliers else ""))
 
+
+
+# ── PLAYER HEADER + RADAR ───────────────────────────────────────
+st.markdown("""
+<style>
+    .player-name {font-size: 2.6rem; font-weight: 700; color: #1F4E79; line-height: 1.1; margin: 0.5rem 0 1rem 0;}
+    .stat-tile {display: inline-block; margin-right: 2.2rem;}
+    .stat-num {font-size: 2rem; font-weight: 700; color: #2E75B6; line-height: 1;}
+    .stat-label {font-size: 0.8rem; color: #555; text-transform: uppercase; letter-spacing: 0.05em;}
+</style>
+""", unsafe_allow_html=True)
+
+last_name, first_name = [x.strip() for x in selected_player_name.split(",", 1)]
+n_sessions = df["session_date"].dt.date.nunique()
+head_col, radar_col = st.columns([2, 3])
+with head_col:
+    st.markdown(f'<p class="player-name">{first_name} {last_name}</p>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="stat-tile"><div class="stat-num">{len(df):,}</div><div class="stat-label">Shots</div></div>'
+        f'<div class="stat-tile"><div class="stat-num">{n_sessions}</div><div class="stat-label">Sessions</div></div>'
+        f'<div class="stat-tile"><div class="stat-num">{df["club"].nunique()}</div><div class="stat-label">Clubs</div></div>',
+        unsafe_allow_html=True)
+    if exclude_outliers:
+        st.caption(f"{n_outliers} outlier shots excluded")
+with radar_col:
+    scores = radar_scores(radar_source, selected_player_id)
+    st.plotly_chart(radar_figure(scores), use_container_width=True)
+    st.caption("Share of shots that hit the player's target, using the targets saved on the day of each shot. "
+               "Uses the date range and outlier setting; the club filter doesn't apply.")
 
 
 # ── PLOT 1: Box Plot ──────────────────────────────────────────────────────────
