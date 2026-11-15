@@ -42,9 +42,15 @@ def _fetch_all(make_query):
 
 
 @st.cache_data(ttl=300)
+def load_coach_names():
+    rows = get_supabase().table("coaches").select("coach_id, first_name, last_name").execute().data or []
+    return {c["coach_id"]: f"{c['first_name']} {c['last_name']}" for c in rows}
+
+
+@st.cache_data(ttl=300)
 def load_players():
     sb = get_supabase()
-    res = (sb.table("players").select("player_id, first_name, last_name")
+    res = (sb.table("players").select("player_id, first_name, last_name, coach_id")
            .eq("active", True).execute())
     return res.data or []
 
@@ -187,8 +193,8 @@ def radar_figure(scores: dict) -> go.Figure:
     fig.update_layout(
         polar=dict(radialaxis=dict(range=[0, 100], tickvals=[25, 50, 75, 100], ticksuffix="%",
                                    tickfont=dict(size=9), gridcolor="#D9E2EC"),
-                   angularaxis=dict(tickfont=dict(size=11), rotation=90, direction="clockwise"), bgcolor="rgba(0,0,0,0)"),
-        showlegend=False, margin=dict(l=70, r=70, t=30, b=30), height=380,
+                   angularaxis=dict(tickfont=dict(size=9), rotation=90, direction="clockwise"), bgcolor="rgba(0,0,0,0)"),
+        showlegend=False, margin=dict(l=70, r=70, t=25, b=25), height=190,
     )
     return fig
 
@@ -250,7 +256,8 @@ with st.sidebar:
 # ── PLAYER HEADER + RADAR ───────────────────────────────────────
 st.markdown("""
 <style>
-    .player-name {font-size: 2.6rem; font-weight: 700; color: #1F4E79; line-height: 1.1; margin: 0.5rem 0 1rem 0;}
+    .player-name {font-size: 4.5rem; font-weight: 700; color: #1F4E79; line-height: 1.05; margin: 0.5rem 0 0.3rem 0;}
+    .player-coach {font-size: 1.2rem; color: #555; margin: 0 0 1.2rem 0;}
     .stat-tile {display: inline-block; margin-right: 2.2rem;}
     .stat-num {font-size: 2rem; font-weight: 700; color: #2E75B6; line-height: 1;}
     .stat-label {font-size: 0.8rem; color: #555; text-transform: uppercase; letter-spacing: 0.05em;}
@@ -259,9 +266,13 @@ st.markdown("""
 
 last_name, first_name = [x.strip() for x in selected_player_name.split(",", 1)]
 n_sessions = df["session_date"].dt.date.nunique()
-head_col, radar_col = st.columns([2, 3])
+head_col, radar_col = st.columns([3, 1])
+player_rec = next(p for p in players_sorted if p["player_id"] == selected_player_id)
+coach_name = load_coach_names().get(player_rec.get("coach_id"), "")
 with head_col:
     st.markdown(f'<p class="player-name">{first_name} {last_name}</p>', unsafe_allow_html=True)
+    if coach_name:
+        st.markdown(f'<p class="player-coach">Coach: {coach_name}</p>', unsafe_allow_html=True)
     st.markdown(
         f'<div class="stat-tile"><div class="stat-num">{len(df):,}</div><div class="stat-label">Shots</div></div>'
         f'<div class="stat-tile"><div class="stat-num">{n_sessions}</div><div class="stat-label">Sessions</div></div>'
@@ -272,8 +283,8 @@ with head_col:
 with radar_col:
     scores = radar_scores(radar_source, selected_player_id)
     st.plotly_chart(radar_figure(scores), use_container_width=True)
-    st.caption("Share of shots that hit the player's target, using the targets saved on the day of each shot. "
-               "Uses the date range and outlier setting; the club filter doesn't apply.")
+    st.caption("Share of shots on target, using the targets saved on each shot's day. "
+               "Follows the date range and outlier setting, not the club filter.")
 
 
 # ── PLOT 1: Box Plot ──────────────────────────────────────────────────────────
