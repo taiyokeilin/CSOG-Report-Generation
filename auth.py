@@ -135,7 +135,7 @@ def apply_branding():
 
 
 def _login_screen():
-    st.title("Golf Coaching Portal")
+    st.title(PORTAL_NAME)
     st.write("Please log in to continue.")
     st.button("Log in", on_click=st.login, args=(PROVIDER,), type="primary")
     st.stop()
