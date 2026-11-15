@@ -50,7 +50,7 @@ def load_coach_names():
 @st.cache_data(ttl=300)
 def load_players():
     sb = get_supabase()
-    res = (sb.table("players").select("player_id, first_name, last_name, coach_id")
+    res = (sb.table("players").select("player_id, first_name, last_name, coach_id, handedness")
            .eq("active", True).execute())
     return res.data or []
 
@@ -300,6 +300,49 @@ with radar_col:
     st.plotly_chart(radar_figure(scores), use_container_width=True)
     st.caption("Share of shots on target, using the targets saved on each shot's day. "
                "Follows the date range and outlier setting, not the club filter.")
+
+
+# ── Club face outlines for the strike location plot ──
+import re as _re
+
+# (half width mm, half height mm, squareness, toe-side extra height)
+FACE_SHAPES = {
+    "driver": (48, 28, 2.6, 0.10),
+    "wood":   (42, 21, 2.4, 0.15),
+    "hybrid": (36, 22, 2.1, 0.15),
+    "iron":   (38, 16, 3.4, 0.25),
+    "wedge":  (37, 17, 2.4, 0.35),
+}
+
+
+def club_category(name: str):
+    """driver / wood / hybrid / iron / wedge from a club name, or None when it can't be told."""
+    n = (name or "").strip().lower()
+    if not n:
+        return None
+    if "driver" in n or _re.search(r"\b1\s?w\b", n) or "1 wood" in n:
+        return "driver"
+    if "hybrid" in n or "rescue" in n or _re.search(r"\b\d{1,2}\s?h\b", n) or "hyb" in n:
+        return "hybrid"
+    if "wood" in n or _re.search(r"\b\d{1,2}\s?w\b", n):
+        return "wood"
+    if "iron" in n or _re.fullmatch(r"\d\s?i", n):
+        return "iron"
+    if ("wedge" in n or _re.search(r"\b(pw|gw|aw|sw|lw|uw)\b", n)
+            or _re.search(r"\b(4[4-9]|5\d|6[0-4])\b", n)):
+        return "wedge"
+    return None
+
+
+def face_outline(category: str, toe_sign: int):
+    """Closed outline (x, y in mm) of a club face; toe_sign says which side of the plot the toe is on."""
+    import numpy as np
+    a, b, n, toe_extra = FACE_SHAPES[category]
+    t = np.linspace(0, 2 * np.pi, 240)
+    c, sn = np.cos(t), np.sin(t)
+    u = a * np.sign(c) * np.abs(c) ** (2 / n)
+    v = b * np.sign(sn) * np.abs(sn) ** (2 / n) * (1 + toe_extra * u / a)
+    return toe_sign * u, v
 
 
 def _darken_hex(hex_color: str, factor: float = 0.85) -> str:
@@ -687,21 +730,38 @@ def render_delivery_impact():
         else:
             impact_plot_df = impact_df.copy()
 
+            # Handedness decides which side the toe is drawn on: left-handed has the toe on the
+            # right (+x); right-handed is mirrored so the heel is positive and the toe negative.
+            handed = (player_rec.get("handedness") or "right").lower()
+            toe_sign = 1 if handed == "left" else -1
+            impact_plot_df["face_impact_horizontal_mm"] = toe_sign * impact_plot_df["face_impact_horizontal_mm"]
+            if not player_rec.get("handedness"):
+                st.caption("Handedness isn't set for this player, so the plot is shown as right-handed. "
+                           "Set it on the Players page.")
+
             import numpy as np
             fig2 = go.Figure()
 
-            # Club face outline — circle with 20mm radius
-            theta = np.linspace(0, 2 * np.pi, 200)
+            # Club face outline: shaped like the club when every selected club is the same kind
+            cats = {club_category(c) for c in impact_clubs}
+            if len(cats) == 1 and None not in cats:
+                outline_x, outline_y = face_outline(next(iter(cats)), toe_sign)
+                reach = max(28, float(np.abs(outline_x).max()) * 1.15)
+            else:
+                theta = np.linspace(0, 2 * np.pi, 200)
+                outline_x, outline_y = 20 * np.cos(theta), 20 * np.sin(theta)
+                reach = 28
             fig2.add_trace(go.Scatter(
-                x=20 * np.cos(theta), y=20 * np.sin(theta),
+                x=outline_x, y=outline_y,
                 mode="lines", line=dict(color="#AAAAAA", width=2),
                 fill="toself", fillcolor="rgba(240,240,240,0.3)",
                 showlegend=False, hoverinfo="skip",
             ))
             # Crosshairs
-            fig2.add_shape(type="line", x0=0, x1=0, y0=-20, y1=20,
+            xr, yr = float(np.abs(outline_x).max()), float(np.abs(outline_y).max())
+            fig2.add_shape(type="line", x0=0, x1=0, y0=-yr, y1=yr,
                            line=dict(color="#CCCCCC", width=1, dash="dash"))
-            fig2.add_shape(type="line", x0=-20, x1=20, y0=0, y1=0,
+            fig2.add_shape(type="line", x0=-xr, x1=xr, y0=0, y1=0,
                            line=dict(color="#CCCCCC", width=1, dash="dash"))
 
             colors = px.colors.qualitative.Plotly
@@ -730,10 +790,10 @@ def render_delivery_impact():
 
             fig2.update_layout(
                 title=f"Strike Location — {', '.join(impact_clubs)}",
-                xaxis_title="← Heel  |  Toe →  (mm)",
+                xaxis_title=("← Heel  |  Toe →  (mm)" if toe_sign == 1 else "← Toe  |  Heel →  (mm)"),
                 yaxis_title="← Low  |  High →  (mm)",
-                xaxis=dict(range=[-28, 28], showgrid=False, zeroline=False),
-                yaxis=dict(range=[-28, 28], showgrid=False, zeroline=False, scaleanchor="x"),
+                xaxis=dict(range=[-reach, reach], showgrid=False, zeroline=False),
+                yaxis=dict(range=[-reach, reach], showgrid=False, zeroline=False, scaleanchor="x"),
                 plot_bgcolor="white", paper_bgcolor="white",
                 height=500, legend_title="Club",
             )

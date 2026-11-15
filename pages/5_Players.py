@@ -2,6 +2,7 @@ import os
 import re
 from datetime import datetime
 
+import pandas as pd
 import streamlit as st
 
 from auth import require_login, filter_players, can_edit
@@ -173,8 +174,116 @@ else:
                      f"{prog_by_id.get(player['program_id'], '-')}")
 
 
+# ── Target history ────────────────────────────────────────────────────────────
+def fmt_day(d: str) -> str:
+    return datetime.strptime(d, "%Y-%m-%d").strftime("%b %d, %Y")
+
+
+st.markdown('<p class="section-header">3 · Target history</p>', unsafe_allow_html=True)
+target_rows = (sb.table("player_targets")
+               .select("target_id, club, skill, target_type, distance_yd, level, sort_order, active, effective_date")
+               .eq("player_id", player_id).execute().data or [])
+if not target_rows:
+    st.info("No targets have been saved for this player yet. Coaches can set them on the Report Generator page.")
+else:
+    is_coach = access["is_coach"]
+    versions = sorted({r["effective_date"] for r in target_rows}, reverse=True)
+    count_by_version = {d: sum(1 for r in target_rows if r["effective_date"] == d) for d in versions}
+    st.caption("Each version is a set of targets that took effect on a date. A session uses the newest version "
+               "of each target dated on or before the session.")
+    version = st.selectbox("Version (date it took effect)", versions, key=f"th_version_{player_id}",
+                           format_func=lambda d: f"{fmt_day(d)}  ({count_by_version[d]} rows)")
+    newer = [d for d in versions if d > version]
+    st.caption(f"Used for sessions from {fmt_day(version)} onward, until a newer version of the same target "
+               f"is saved" + (f" (the next version is {fmt_day(min(newer))})." if newer else "."))
+
+    rows_v = sorted((r for r in target_rows if r["effective_date"] == version),
+                    key=lambda r: (r["sort_order"] or 0, r["club"], r["target_type"]))
+    table = pd.DataFrame([{
+        "Club": r["club"], "Skill": r["skill"], "Target type": r["target_type"],
+        "Distance (yd)": r["distance_yd"], "Level": r["level"], "Active": bool(r["active"]), "Delete": False,
+    } for r in rows_v])
+
+    if not is_coach:
+        st.dataframe(table.drop(columns=["Delete"]).assign(Active=table["Active"].map({True: "Yes", False: "Retired"})),
+                     hide_index=True, use_container_width=True)
+    else:
+        st.caption("Edit distance, level or active, or tick Delete to remove a row, then save. "
+                   "Unticking Active retires that target from this date onward.")
+        edited = st.data_editor(
+            table, hide_index=True, use_container_width=True, num_rows="fixed",
+            disabled=["Club", "Skill", "Target type"], key=f"th_editor_{player_id}_{version}",
+            column_config={
+                "Distance (yd)": st.column_config.NumberColumn(min_value=0, max_value=400, step=1),
+                "Level": st.column_config.NumberColumn(min_value=1, max_value=12, step=1),
+                "Active": st.column_config.CheckboxColumn(),
+                "Delete": st.column_config.CheckboxColumn(help="Remove this row from this version"),
+            })
+        if st.button("Save changes to this version", key=f"th_save_{player_id}_{version}"):
+            try:
+                if not access["is_coach"]:
+                    raise PermissionError("Only coaches can change targets.")
+                changed = deleted = 0
+                for i, r in enumerate(rows_v):
+                    new = edited.iloc[i]
+                    if bool(new["Delete"]):
+                        sb.table("player_targets").delete().eq("target_id", r["target_id"]) \
+                          .eq("player_id", player_id).execute()
+                        deleted += 1
+                        continue
+                    dist = None if pd.isna(new["Distance (yd)"]) else int(new["Distance (yd)"])
+                    level = int(new["Level"])
+                    if not 1 <= level <= 12:
+                        raise ValueError("Level must be between 1 and 12.")
+                    if (dist != r["distance_yd"]) or (level != r["level"]) or (bool(new["Active"]) != bool(r["active"])):
+                        sb.table("player_targets").update(
+                            {"distance_yd": dist, "level": level, "active": bool(new["Active"])}
+                        ).eq("target_id", r["target_id"]).eq("player_id", player_id).execute()
+                        changed += 1
+                st.cache_data.clear()
+                st.success(f"Saved: {changed} changed, {deleted} deleted.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Couldn't save: {e}")
+
+        with st.expander("Move or delete this whole version"):
+            new_day = st.date_input("Move this version to a different date",
+                                    value=datetime.strptime(version, "%Y-%m-%d").date(), key=f"th_move_{player_id}_{version}")
+            if st.button("Move version", key=f"th_move_btn_{player_id}_{version}"):
+                try:
+                    if not access["is_coach"]:
+                        raise PermissionError("Only coaches can change targets.")
+                    if new_day.isoformat() == version:
+                        st.info("That's already this version's date.")
+                    else:
+                        (sb.table("player_targets").update({"effective_date": new_day.isoformat()})
+                           .eq("player_id", player_id).eq("effective_date", version).execute())
+                        st.cache_data.clear()
+                        st.session_state.pop(f"th_version_{player_id}", None)
+                        st.success("Version moved.")
+                        st.rerun()
+                except Exception as e:
+                    msg = str(e)
+                    if "duplicate" in msg.lower() or "unique" in msg.lower():
+                        msg = "Another version on that date already has some of the same targets. Edit or delete that one first."
+                    st.error(f"Couldn't move: {msg}")
+            st.divider()
+            sure_v = st.checkbox("I understand deleting a version can't be undone", key=f"th_sure_{player_id}_{version}")
+            if st.button("Delete this version", disabled=not sure_v, key=f"th_del_{player_id}_{version}"):
+                try:
+                    if not access["is_coach"]:
+                        raise PermissionError("Only coaches can change targets.")
+                    (sb.table("player_targets").delete()
+                       .eq("player_id", player_id).eq("effective_date", version).execute())
+                    st.cache_data.clear()
+                    st.session_state.pop(f"th_version_{player_id}", None)
+                    st.success("Version deleted.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Couldn't delete: {e}")
+
 # ── Sessions ──────────────────────────────────────────────────────────────────
-st.markdown('<p class="section-header">3 · Sessions</p>', unsafe_allow_html=True)
+st.markdown('<p class="section-header">4 · Sessions</p>', unsafe_allow_html=True)
 sessions = (sb.table("sessions")
             .select("session_id, session_date, week, location_id, program_id, launch_monitor_type, raw_file_path")
             .eq("player_id", player_id).order("session_date", desc=True).execute().data or [])
@@ -243,7 +352,3 @@ if access["is_coach"]:
                 st.rerun()
             except Exception as e:
                 st.error(f"Couldn't delete: {e}")
-
-if editable:
-    st.caption("To change this player's targets, open the **Report Generator** page, adjust the clubs, "
-               "and use *Save as this player's targets*.")
