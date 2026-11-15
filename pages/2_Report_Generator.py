@@ -67,9 +67,9 @@ SKILL_TARGET_TYPES = {
     "Other":      ["Proximity", "Distance Control", "Distance", "Dispersion"],
 }
 ALL_TYPES = ["Proximity", "Distance Control", "Distance", "Dispersion"]
-# Two level sliders per club: the first governs Proximity (or Distance for driving),
-# the second governs Distance Control (or Dispersion for driving).
-LEVEL_SLOT = {"Proximity": 0, "Distance": 0, "Distance Control": 1, "Dispersion": 1}
+# Two level sliders per club: the first governs Distance Control (or Distance for driving),
+# the second governs Proximity (or Dispersion for driving).
+LEVEL_SLOT = {"Distance Control": 0, "Distance": 0, "Proximity": 1, "Dispersion": 1}
 DEFAULT_SELECTED = {
     "Wedge Play": ["Proximity", "Distance Control"],
     "Approach":   ["Proximity", "Distance Control"],
@@ -235,14 +235,6 @@ if st.session_state.get("rg_cfg_key") != cfg_key:
 configs = st.session_state.rg_configs
 ver = st.session_state.rg_ver
 
-if saved_rows:
-    latest = max(r["effective_date"] for r in saved_rows)
-    st.caption(f"Loaded this player's saved targets (in effect since {latest}). "
-               "Clubs without saved targets show suggested defaults.")
-else:
-    st.caption("No saved targets for this player yet. Showing suggested defaults. "
-               "Adjust them, then use **Save as targets** below to keep them.")
-
 LEVEL_INFO = """**Level Multipliers**
 
 | Level | Rate Mult | Prox Mult |
@@ -280,14 +272,24 @@ LEVEL_INFO = """**Level Multipliers**
 | 250–259 | 48.0 | 8.0 |
 """
 
-WIDTHS = [1.3, 0.675, 1.8, 0.8, 1.32, 2.2, 1.2, 0.9, 0.9]
+cap_col, info_col = st.columns([4, 1])
+with cap_col:
+    if saved_rows:
+        latest = max(r["effective_date"] for r in saved_rows)
+        st.caption(f"Loaded this player's saved targets (in effect since {latest}). "
+                   "Clubs without saved targets show suggested defaults.")
+    else:
+        st.caption("No saved targets for this player yet. Showing suggested defaults. "
+                   "Adjust them, then use **Save as targets** below to keep them.")
+with info_col:
+    with st.popover("Level guide", use_container_width=True):
+        st.markdown(LEVEL_INFO)
+
+WIDTHS = [1.3, 0.675, 1.62, 0.8, 1.254, 2.2, 1.14, 1.053, 1.053]
 hdr = st.columns(WIDTHS)
 for i, t in enumerate(["Order", "Include", "Club", "Shots", "Skill", "Target Types", "Distance (yd)",
-                       "Level: Prox / Dist", "Level: Dist Ctrl / Disp"]):
+                       "Level: Dist Ctrl / Dist", "Level: Prox / Disp"]):
     hdr[i].markdown(f"**{t}**")
-with hdr[8]:
-    with st.popover("Level info"):
-        st.markdown(LEVEL_INFO)
 
 shot_counts = df["club"].value_counts().to_dict()
 
