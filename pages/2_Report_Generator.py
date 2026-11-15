@@ -66,6 +66,10 @@ SKILL_TARGET_TYPES = {
     "Putting":    ["Proximity", "Distance Control"],
     "Other":      ["Proximity", "Distance Control", "Distance", "Dispersion"],
 }
+ALL_TYPES = ["Proximity", "Distance Control", "Distance", "Dispersion"]
+# Two level sliders per club: the first governs Proximity (or Distance for driving),
+# the second governs Distance Control (or Dispersion for driving).
+LEVEL_SLOT = {"Proximity": 0, "Distance": 0, "Distance Control": 1, "Dispersion": 1}
 DEFAULT_SELECTED = {
     "Wedge Play": ["Proximity", "Distance Control"],
     "Approach":   ["Proximity", "Distance Control"],
@@ -149,7 +153,7 @@ def _infer_section(club_name):
 def _default_cfg(club):
     section = _infer_section(club)
     return {
-        "club": club, "level": 5, "skill": section, "include": True,
+        "club": club, "levels": {t: 5 for t in ALL_TYPES}, "skill": section, "include": True,
         "selected_target_types": list(DEFAULT_SELECTED.get(section, ["Proximity"])),
         "distance_yd": _infer_distance(club),
     }
@@ -161,9 +165,10 @@ def build_configs(clubs_in_session, saved_rows):
     for r in saved_rows:
         c = r["club"]
         if c not in by_club:
-            by_club[c] = {"club": c, "level": r["level"], "skill": r["skill"], "include": True,
+            by_club[c] = {"club": c, "levels": {t: 5 for t in ALL_TYPES}, "skill": r["skill"], "include": True,
                           "selected_target_types": [], "distance_yd": r.get("distance_yd")}
             order.append(c)
+        by_club[c]["levels"][r["target_type"]] = int(r["level"])
         by_club[c]["selected_target_types"].append(r["target_type"])
     configs = [by_club[c] for c in order if c in clubs_in_session]
     seen = {c["club"] for c in configs}
@@ -275,14 +280,13 @@ LEVEL_INFO = """**Level Multipliers**
 | 250–259 | 48.0 | 8.0 |
 """
 
-WIDTHS = [1.3, 0.9, 1.8, 0.8, 1.2, 2.2, 1.5, 1.6]
+WIDTHS = [1.3, 0.675, 1.8, 0.8, 1.32, 2.2, 1.2, 0.9, 0.9]
 hdr = st.columns(WIDTHS)
-for i, t in enumerate(["Order", "Include", "Club", "Shots", "Skill", "Target Types", "Distance (yd)"]):
+for i, t in enumerate(["Order", "Include", "Club", "Shots", "Skill", "Target Types", "Distance (yd)",
+                       "Level: Prox / Dist", "Level: Dist Ctrl / Disp"]):
     hdr[i].markdown(f"**{t}**")
-with hdr[7]:
-    lbl, btn = st.columns([2, 1])
-    lbl.markdown("**Level (1–12)**")
-    with btn.popover("Info"):
+with hdr[8]:
+    with st.popover("Level info"):
         st.markdown(LEVEL_INFO)
 
 shot_counts = df["club"].value_counts().to_dict()
@@ -322,8 +326,16 @@ for idx, cfg in enumerate(configs):
                                step=5, key=f"dist_{ver}_{idx}", label_visibility="collapsed")
     cfg["distance_yd"] = dist if dist > 0 else None
 
-    cfg["level"] = row[7].slider("", 1, 12, value=int(cfg["level"]),
-                                 key=f"lvl_{ver}_{idx}", label_visibility="collapsed")
+    for slot in (0, 1):
+        types_here = [t for t in cfg["selected_target_types"] if LEVEL_SLOT[t] == slot]
+        rep_type = types_here[0] if types_here else next(t for t in ALL_TYPES if LEVEL_SLOT[t] == slot
+                                                         and t in SKILL_TARGET_TYPES.get(cfg["skill"], ALL_TYPES))
+        value = row[7 + slot].slider("", 1, 12, value=int(cfg["levels"].get(rep_type, 5)),
+                                     key=f"lvl{slot}_{ver}_{idx}", label_visibility="collapsed",
+                                     disabled=not types_here)
+        if types_here:
+            for t in types_here:
+                cfg["levels"][t] = value
 
 st.session_state.rg_configs = configs
 
@@ -344,7 +356,7 @@ def save_targets(effective: date):
         for t in c["selected_target_types"]:
             rows.append({
                 "player_id": player_id, "club": c["club"], "skill": c["skill"], "target_type": t,
-                "distance_yd": c["distance_yd"], "level": c["level"], "sort_order": order,
+                "distance_yd": c["distance_yd"], "level": c["levels"].get(t, 5), "sort_order": order,
                 "active": True, "effective_date": eff,
             })
     # Retire previous targets for clubs in this session that were unchecked or changed skill/type
@@ -392,7 +404,7 @@ def expand_configs(cfgs):
         if not cfg["include"]:
             continue
         for t in cfg["selected_target_types"]:
-            out.append({"club": cfg["club"], "level": cfg["level"], "target_type": t,
+            out.append({"club": cfg["club"], "level": cfg["levels"].get(t, 5), "target_type": t,
                         "distance_yd": cfg["distance_yd"], "section": cfg["skill"]})
     return out
 
@@ -406,7 +418,7 @@ if st.button("Generate Report", type="primary"):
             session_info = {
                 "player": f"{player['first_name']} {player['last_name']}",
                 "coach": load_coach_names().get(player.get("coach_id"), ""),
-                "date": session_date.strftime("%B %d, %Y"),
+                "date": f"{session_date.strftime('%B')} {session_date.day}, {session_date.year}",
                 "week": session.get("week") or "",
             }
             try:

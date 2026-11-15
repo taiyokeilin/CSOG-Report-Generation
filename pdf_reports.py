@@ -118,6 +118,12 @@ def _section_bar(text, width=CONTENT_W, size=10):
     return t
 
 
+def _date_with_week(info: dict) -> str:
+    date_text = str(info.get("date") or "")
+    week = str(info.get("week") or "").strip()
+    return f"{date_text} (Week {week})" if week else date_text
+
+
 def _header_block(title, info_rows, logo_path):
     """Logo on the left, title and a small label/value grid on the right."""
     info = Table(
@@ -130,7 +136,8 @@ def _header_block(title, info_rows, logo_path):
         ("LEFTPADDING", (0, 0), (-1, -1), 0), ("TOPPADDING", (0, 0), (-1, -1), 1),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 1), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
     ]))
-    right = [Paragraph(title, _style("t", 20, bold=True, color=NAVY, leading=24)), Spacer(1, 4), info]
+    size = 20 if len(title) <= 34 else (17 if len(title) <= 42 else 14)
+    right = [Paragraph(title, _style("t", size, bold=True, color=NAVY, leading=size + 4)), Spacer(1, 4), info]
     block = Table([[_logo(logo_path, 62), right]], colWidths=[76, CONTENT_W - 76])
     block.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
@@ -156,9 +163,9 @@ def build_session_card_pdf(df, session_info: dict, club_configs: list, logo_path
     overall = compute_overall([r["stats"] for s in ordered for r in sections_dict[s]])
 
     story = [
-        _header_block("Player Practice Report Card", [
-            ("Player:", session_info.get("player"), "Coach:", session_info.get("coach")),
-            ("Date:", session_info.get("date"), "Week:", session_info.get("week")),
+        _header_block(f"{session_info.get('player') or 'Player'} Practice Report Card", [
+            ("Date:", _date_with_week(session_info), "", ""),
+            ("Coach:", session_info.get("coach"), "", ""),
         ], logo_path),
         Spacer(1, 10),
     ]
